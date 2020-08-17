@@ -1,0 +1,13 @@
+[package]
+name = "nvptx-sys"
+version = "0.0.1"
+authors = ["Julia Tatz <tatz.j@northeastern.edu>"]
+edition = "2018"
+
+[dependencies]
+libm = "0.2"
+
+[features]
+default = []
+panic = []
+alloc = []
