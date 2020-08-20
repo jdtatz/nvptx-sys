@@ -1,5 +1,39 @@
 use core::ops::*;
 
+macro_rules! fast_math {
+    ($slow:expr; $fast:expr) => {
+        {
+            #[cfg(feature="fast-math")] {
+                unsafe { $fast }
+            } #[cfg(not(feature="fast-math"))] {
+                $slow
+            }
+        }
+    };
+}
+
+#[cfg(feature="fast-math")]
+extern "C" {
+    #[link_name = "llvm.nvvm.sqrt.approx.ftz.f"]
+    fn sqrt_approx(v: f32) -> f32;
+
+    #[link_name = "llvm.nvvm.rsqrt.approx.ftz.f"]
+    pub fn rsqrt_approx(v: f32) -> f32;
+    #[link_name = "llvm.nvvm.div.approx.ftz.f"]
+    pub fn div_approx(l: f32, r: f32) -> f32;
+
+
+    #[link_name = "llvm.nvvm.sin.approx.ftz.f"]
+    fn sin_approx(v: f32) -> f32;
+    #[link_name = "llvm.nvvm.cos.approx.ftz.f"]
+    fn cos_approx(v: f32) -> f32;
+
+    #[link_name = "llvm.nvvm.ex2.approx.ftz.f"]
+    fn ex2_approx(v: f32) -> f32;
+    #[link_name = "llvm.nvvm.lg2.approx.ftz.f"]
+    fn lg2_approx(v: f32) -> f32;
+}
+
 pub trait Float:
 'static
 + Copy
@@ -142,7 +176,10 @@ impl Float for f32 {
     }
 
     fn cos(self) -> Self {
-        libm::cosf(self)
+        fast_math!(
+            libm::cosf(self);
+            cos_approx(self)
+        )
     }
 
     fn cosh(self) -> Self {
@@ -154,7 +191,10 @@ impl Float for f32 {
     }
 
     fn exp2(self) -> Self {
-        libm::exp2f(self)
+        fast_math!(
+            libm::exp2f(self);
+            ex2_approx(self)
+        )
     }
 
     fn exp_m1(self) -> Self {
@@ -182,7 +222,10 @@ impl Float for f32 {
     }
 
     fn log2(self) -> Self {
-        libm::log2f(self)
+        fast_math!(
+            libm::log2f(self);
+            lg2_approx(self)
+        )
     }
 
     fn mul_add(self, a: Self, b: Self) -> Self {
@@ -202,11 +245,17 @@ impl Float for f32 {
     }
 
     fn sin(self) -> Self {
-        libm::sinf(self)
+        fast_math!(
+            libm::sinf(self);
+            sin_approx(self)
+        )
     }
 
     fn sin_cos(self) -> (Self, Self) {
-        libm::sincosf(self)
+        fast_math!(
+            libm::sincosf(self);
+            (sin_approx(self), cos_approx(self))
+        )
     }
 
     fn sinh(self) -> Self {
@@ -214,7 +263,10 @@ impl Float for f32 {
     }
 
     fn sqrt(self) -> Self {
-        unsafe { core::intrinsics::sqrtf32(self) }
+        fast_math!(
+            unsafe { core::intrinsics::sqrtf32(self) };
+            sqrt_approx(self)
+        )
     }
 
     fn tan(self) -> Self {

@@ -17,7 +17,7 @@ mod panic;
 #[cfg(feature = "alloc")]
 mod allocator;
 mod float;
-pub use crate::float::Float;
+pub use crate::float::*;
 use core::ptr::NonNull;
 
 

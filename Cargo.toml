@@ -11,3 +11,5 @@ libm = "0.2"
 default = []
 panic = []
 alloc = []
+noisy-panics = ["panic"]
+fast-math = []
