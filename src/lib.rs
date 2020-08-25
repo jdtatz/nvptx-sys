@@ -90,7 +90,7 @@ extern "C" {
         line: u32,
         function: *const u8,
         char_size: usize,
-    );
+    ) -> !;
 }
 
 

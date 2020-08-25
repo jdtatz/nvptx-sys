@@ -8,19 +8,19 @@ extern "C" {
         line: u32,
         function: *const u8,
         char_size: usize,
-    );
+    ) -> !;
 }
 
 #[panic_handler]
 unsafe fn cuda_panic_handler(panic_info: &PanicInfo) -> ! {
-    #[cfg(feature = "noisy-panics")] {
-        let (file, line) = if let Some(loc) = panic_info.location() {
-            (loc.file(), loc.line())
-        } else {
-            ("unknown\0", 0)
-        };
+    let (file, line) = if let Some(loc) = panic_info.location() {
+        (loc.file(), loc.line())
+    } else {
+        ("unknown\0", 0)
+    };
 
-        let message = {
+    let message = {
+        #[cfg(feature = "noisy-panics")] {
             #[cfg(feature = "alloc")] {
                 if let Some(args) = panic_info.message() {
                     let mut msg = alloc::string::String::new();
@@ -44,16 +44,17 @@ unsafe fn cuda_panic_handler(panic_info: &PanicInfo) -> ! {
                     "unknown error"
                 }
             }
-        };
-        // hopefully null terminators are optional
-        __assertfail(
-            message.as_ptr(),
-            file.as_ptr(),
-            line,
-            b"unknown\0".as_ptr(),
-            1
-        );
-    }
-    core::intrinsics::breakpoint();
-    core::hint::unreachable_unchecked();
+        }
+        #[cfg(not(feature = "noisy-panics"))] {
+            "panicked!\0"
+        }
+    };
+    // hopefully null terminators are optional
+    __assertfail(
+        message.as_ptr(),
+        file.as_ptr(),
+        line,
+        b"unknown\0".as_ptr(),
+        1
+    );
 }

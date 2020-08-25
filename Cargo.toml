@@ -1,6 +1,6 @@
 [package]
 name = "nvptx-sys"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Julia Tatz <tatz.j@northeastern.edu>"]
 edition = "2018"
 
