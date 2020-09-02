@@ -117,6 +117,7 @@ pub trait Float:
         if r < Self::ZERO { r + rhs.abs() } else { r }
     }
     fn round(self) -> Self;
+    fn rsqrt(self) -> Self;
     fn signum(self) -> Self;
     fn sin(self) -> Self;
     fn sin_cos(self) -> (Self, Self);
@@ -238,6 +239,13 @@ impl Float for f32 {
 
     fn round(self) -> Self {
         libm::roundf(self)
+    }
+
+    fn rsqrt(self) -> Self {
+        fast_math!(
+            (1f32 / self.sqrt());
+            rsqrt_approx(self)
+        )
     }
 
     fn signum(self) -> Self {
