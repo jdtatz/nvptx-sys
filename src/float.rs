@@ -211,7 +211,13 @@ impl Float for f32 {
     }
 
     fn ln(self) -> Self {
-        libm::logf(self)
+        fast_math!(
+            libm::logf(self);
+            {
+                const RECIP_LOG2_E: f32 = 1f32 / core::f32::consts::LOG2_E;
+                lg2_approx(self) * RECIP_LOG2_E
+            }
+        )
     }
 
     fn ln_1p(self) -> Self {
@@ -219,7 +225,13 @@ impl Float for f32 {
     }
 
     fn log10(self) -> Self {
-        libm::log10f(self)
+        fast_math!(
+            libm::log10f(self);
+            {
+                const RECIP_LOG2_10: f32 = 1f32 / core::f32::consts::LOG2_10;
+                lg2_approx(self) * RECIP_LOG2_10
+            }
+        )
     }
 
     fn log2(self) -> Self {
@@ -243,7 +255,7 @@ impl Float for f32 {
 
     fn rsqrt(self) -> Self {
         fast_math!(
-            (1f32 / self.sqrt());
+            1f32 / self.sqrt();
             rsqrt_approx(self)
         )
     }
