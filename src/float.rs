@@ -188,7 +188,13 @@ impl Float for f32 {
     }
 
     fn exp(self) -> Self {
-        libm::expf(self)
+        fast_math!(
+            libm::expf(self);
+            {
+                const RECIP_LN_2: f32 = 1f32 / core::f32::consts::LN_2;
+                ex2_approx(self * RECIP_LN_2)
+            }
+        )
     }
 
     fn exp2(self) -> Self {
