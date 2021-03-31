@@ -19,6 +19,7 @@ mod allocator;
 mod float;
 pub use crate::float::*;
 use core::ptr::NonNull;
+pub use nvptx_vprintf::printf;
 
 
 extern "C" {
@@ -82,7 +83,7 @@ extern "C" {
     fn __syncthreads_count(test: i32) -> i32;
 
     #[link_name = "vprintf"]
-    pub fn vprintf(format: *const u8, va_list: *mut u8) -> i32;
+    pub fn vprintf(format: *const u8, va_list: *mut core::ffi::c_void) -> i32;
     #[link_name = "__assertfail"]
     pub fn __assertfail(
         message: *const u8,
@@ -271,15 +272,4 @@ pub unsafe fn shared<T: 'static + Sized + Send + Sync>() -> *mut T {
         options(nostack, preserves_flags)
     );
     shared_ptr
-}
-
-#[macro_export]
-macro_rules! printf {
-	($fmt:literal, $($args:expr),* $(,)?) => {
-	    let mut args = [
-	        $( core::mem::transmute($args) ),*
-	    ];
-	    let args_ptr: *mut u64 = args.as_mut_ptr();
-	    $crate::vprintf( concat!($fmt, "\0").as_ptr(), args_ptr as *mut _ )
-	}
 }

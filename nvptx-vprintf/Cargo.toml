@@ -1,0 +1,13 @@
+[package]
+name = "nvptx-vprintf"
+version = "0.0.1"
+authors = ["Julia Tatz <tatz.j@northeastern.edu>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "1", features = ["full"] }
