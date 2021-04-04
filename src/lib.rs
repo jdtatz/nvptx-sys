@@ -63,10 +63,10 @@ extern "C" {
     #[link_name = "llvm.nvvm.match.any.sync.i64"]
     fn match_any_i64_sync(membermask: u32, value: u64) -> u32;
 
-    #[link_name = "llvm.nvvm.match.all.sync.i32p"]
-    fn match_all_i32_sync(membermask: u32, value: u32) -> (u32, bool);
-    #[link_name = "llvm.nvvm.match.all.sync.i64p"]
-    fn match_all_i64_sync(membermask: u32, value: u64) -> (u32, bool);
+    // #[link_name = "llvm.nvvm.match.all.sync.i32p"]
+    // fn match_all_i32_sync(membermask: u32, value: u32) -> (u32, bool);
+    // #[link_name = "llvm.nvvm.match.all.sync.i64p"]
+    // fn match_all_i64_sync(membermask: u32, value: u64) -> (u32, bool);
 }
 
 /// true if the source predicates is true for all thread in %membermask, false otherwise
@@ -91,61 +91,61 @@ pub fn vote_ballot(membermask: u32, pred: bool) -> u32 {
 
 pub trait Match: Sized {
     fn match_any(self, membermask: u32) -> u32;
-    fn match_all(self, membermask: u32) -> (u32, bool);
+    // fn match_all(self, membermask: u32) -> (u32, bool);
 }
 
 impl Match for u32 {
     fn match_any(self, membermask: u32) -> u32 {
         unsafe { match_any_i32_sync(membermask, self) }
     }
-    fn match_all(self, membermask: u32) -> (u32, bool) {
-        unsafe { match_all_i32_sync(membermask, self) }
-    }
+    // fn match_all(self, membermask: u32) -> (u32, bool) {
+    //     unsafe { match_all_i32_sync(membermask, self) }
+    // }
 }
 
 impl Match for i32 {
     fn match_any(self, membermask: u32) -> u32 {
         unsafe { match_any_i32_sync(membermask, transmute(self)) }
     }
-    fn match_all(self, membermask: u32) -> (u32, bool) {
-        unsafe { match_all_i32_sync(membermask, transmute(self)) }
-    }
+    // fn match_all(self, membermask: u32) -> (u32, bool) {
+    //     unsafe { match_all_i32_sync(membermask, transmute(self)) }
+    // }
 }
 
 impl Match for f32 {
     fn match_any(self, membermask: u32) -> u32 {
         unsafe { match_any_i32_sync(membermask, transmute(self)) }
     }
-    fn match_all(self, membermask: u32) -> (u32, bool) {
-        unsafe { match_all_i32_sync(membermask, transmute(self)) }
-    }
+    // fn match_all(self, membermask: u32) -> (u32, bool) {
+    //     unsafe { match_all_i32_sync(membermask, transmute(self)) }
+    // }
 }
 
 impl Match for u64 {
     fn match_any(self, membermask: u32) -> u32 {
         unsafe { match_any_i64_sync(membermask, self) }
     }
-    fn match_all(self, membermask: u32) -> (u32, bool) {
-        unsafe { match_all_i64_sync(membermask, self) }
-    }
+    // fn match_all(self, membermask: u32) -> (u32, bool) {
+    //     unsafe { match_all_i64_sync(membermask, self) }
+    // }
 }
 
 impl Match for i64 {
     fn match_any(self, membermask: u32) -> u32 {
         unsafe { match_any_i64_sync(membermask, transmute(self)) }
     }
-    fn match_all(self, membermask: u32) -> (u32, bool) {
-        unsafe { match_all_i64_sync(membermask, transmute(self)) }
-    }
+    // fn match_all(self, membermask: u32) -> (u32, bool) {
+    //     unsafe { match_all_i64_sync(membermask, transmute(self)) }
+    // }
 }
 
 impl Match for f64 {
     fn match_any(self, membermask: u32) -> u32 {
         unsafe { match_any_i64_sync(membermask, transmute(self)) }
     }
-    fn match_all(self, membermask: u32) -> (u32, bool) {
-        unsafe { match_all_i64_sync(membermask, transmute(self)) }
-    }
+    // fn match_all(self, membermask: u32) -> (u32, bool) {
+    //     unsafe { match_all_i64_sync(membermask, transmute(self)) }
+    // }
 }
 
 // #[repr(transparent)]
