@@ -1,225 +1,150 @@
 #![no_std]
 #![feature(core_intrinsics, asm, global_asm, link_llvm_intrinsics)]
 #![cfg_attr(feature = "alloc", feature(alloc_error_handler))]
-#![cfg_attr(all(feature = "panic", feature = "alloc"), feature(panic_info_message))]
+#![cfg_attr(
+    all(feature = "panic", feature = "alloc"),
+    feature(panic_info_message, fmt_as_str)
+)]
 #![allow(non_camel_case_types)]
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
+
+// TODO: Documentation, active-mask, warp matrix ops, memory barriers, asynchronous copy,
+// builtin-redux, nanosleep, cfg guards for ptx isa version & sm version,
+// clock sreg?, math rounding modes?, cooperative groups?, unstable-allocator-api?
 
 /*
 https://docs.nvidia.com/cuda/parallel-thread-execution/index.htm
 https://docs.nvidia.com/cuda/ptx-writers-guide-to-interoperability/index.html
 */
 
-#[cfg(feature = "panic")]
-mod panic;
 #[cfg(feature = "alloc")]
 mod allocator;
+mod barrier;
 mod float;
+#[cfg(feature = "panic")]
+mod panic;
+mod shuffle;
+mod sreg;
+mod syscall;
+pub use crate::barrier::*;
 pub use crate::float::*;
-use core::ptr::NonNull;
+pub use crate::shuffle::*;
+pub use crate::sreg::*;
+pub use crate::syscall::*;
+use core::{intrinsics::transmute, ptr::NonNull};
 pub use nvptx_vprintf::printf;
-
-
-extern "C" {
-    #[link_name = "llvm.nvvm.read.ptx.sreg.tid.x"]
-    fn read_ptx_sreg_tid_x() -> i32;
-    #[link_name = "llvm.nvvm.read.ptx.sreg.tid.y"]
-    fn read_ptx_sreg_tid_y() -> i32;
-    #[link_name = "llvm.nvvm.read.ptx.sreg.tid.z"]
-    fn read_ptx_sreg_tid_z() -> i32;
-
-    #[link_name = "llvm.nvvm.read.ptx.sreg.ntid.x"]
-    fn read_ptx_sreg_ntid_x() -> i32;
-    #[link_name = "llvm.nvvm.read.ptx.sreg.ntid.y"]
-    fn read_ptx_sreg_ntid_y() -> i32;
-    #[link_name = "llvm.nvvm.read.ptx.sreg.ntid.z"]
-    fn read_ptx_sreg_ntid_z() -> i32;
-
-    #[link_name = "llvm.nvvm.read.ptx.sreg.ctaid.x"]
-    fn read_ptx_sreg_ctaid_x() -> i32;
-    #[link_name = "llvm.nvvm.read.ptx.sreg.ctaid.y"]
-    fn read_ptx_sreg_ctaid_y() -> i32;
-    #[link_name = "llvm.nvvm.read.ptx.sreg.ctaid.z"]
-    fn read_ptx_sreg_ctaid_z() -> i32;
-
-    #[link_name = "llvm.nvvm.read.ptx.sreg.nctaid.x"]
-    fn read_ptx_sreg_nctaid_x() -> i32;
-    #[link_name = "llvm.nvvm.read.ptx.sreg.nctaid.y"]
-    fn read_ptx_sreg_nctaid_y() -> i32;
-    #[link_name = "llvm.nvvm.read.ptx.sreg.nctaid.z"]
-    fn read_ptx_sreg_nctaid_z() -> i32;
-
-    #[link_name = "llvm.nvvm.atomic.load.add.f32.p0f32"]
-    pub fn atomic_load_add_f32(address: *mut f32, val: f32) -> f32;
-
-    #[link_name = "llvm.nvvm.read.ptx.sreg.laneid"]
-    fn read_nvvm_read_ptx_sreg_laneid() -> i32;
-
-    #[link_name = "llvm.nvvm.shfl.sync.idx.i32"]
-    fn shfl_sync_i32(mask: u32, val: i32, src_lane: u32, packing: u32) -> i32;
-    #[link_name = "llvm.nvvm.shfl.sync.down.i32"]
-    fn shfl_down_sync_i32(mask: u32, val: i32, delta: u32, packing: u32) -> i32;
-    #[link_name = "llvm.nvvm.shfl.sync.up.i32"]
-    fn shfl_up_sync_i32(mask: u32, val: i32, delta: u32, packing: u32) -> i32;
-    #[link_name = "llvm.nvvm.shfl.sync.bfly.i32"]
-    fn shfl_bfly_sync_i32(mask: u32, val: i32, lane_mask: u32, packing: u32) -> i32;
-
-    #[link_name = "llvm.nvvm.shfl.sync.idx.f32"]
-    fn shfl_sync_f32(mask: u32, val: f32, src_lane: u32, packing: u32) -> f32;
-    #[link_name = "llvm.nvvm.shfl.sync.down.f32"]
-    fn shfl_down_sync_f32(mask: u32, val: f32, delta: u32, packing: u32) -> f32;
-    #[link_name = "llvm.nvvm.shfl.sync.up.f32"]
-    fn shfl_up_sync_f32(mask: u32, val: f32, delta: u32, packing: u32) -> f32;
-    #[link_name = "llvm.nvvm.shfl.sync.bfly.f32"]
-    fn shfl_bfly_sync_f32(mask: u32, val: f32, lane_mask: u32, packing: u32) -> f32;
-
-    #[link_name = "llvm.nvvm.barrier0"]
-    fn __syncthreads();
-    #[link_name = "llvm.nvvm.barrier0.or"]
-    fn __syncthreads_or(test: i32) -> i32;
-    #[link_name = "llvm.nvvm.barrier0.popc"]
-    fn __syncthreads_count(test: i32) -> i32;
-
-    #[link_name = "vprintf"]
-    pub fn vprintf(format: *const u8, va_list: *mut core::ffi::c_void) -> i32;
-    #[link_name = "__assertfail"]
-    pub fn __assertfail(
-        message: *const u8,
-        file: *const u8,
-        line: u32,
-        function: *const u8,
-        char_size: usize,
-    ) -> !;
-}
-
-
-pub struct threadIdx {}
-pub struct blockIdx {}
-pub struct blockDim {}
-pub struct gridDim {}
-
-impl threadIdx {
-    pub fn x() -> usize {
-        unsafe { read_ptx_sreg_tid_x() as usize }
-    }
-    pub fn y() -> usize {
-        unsafe { read_ptx_sreg_tid_y() as usize }
-    }
-    pub fn z() -> usize {
-        unsafe { read_ptx_sreg_tid_z() as usize }
-    }
-}
-
-impl blockIdx {
-    pub fn x() -> usize {
-        unsafe { read_ptx_sreg_ctaid_x() as usize }
-    }
-    pub fn y() -> usize {
-        unsafe { read_ptx_sreg_ctaid_y() as usize }
-    }
-    pub fn z() -> usize {
-        unsafe { read_ptx_sreg_ctaid_z() as usize }
-    }
-}
-
-impl blockDim {
-    pub fn x() -> usize {
-        unsafe { read_ptx_sreg_ntid_x() as usize }
-    }
-    pub fn y() -> usize {
-        unsafe { read_ptx_sreg_ntid_y() as usize }
-    }
-    pub fn z() -> usize {
-        unsafe { read_ptx_sreg_ntid_z() as usize }
-    }
-}
-
-impl gridDim {
-    pub fn x() -> usize {
-        unsafe { read_ptx_sreg_nctaid_x() as usize }
-    }
-    pub fn y() -> usize {
-        unsafe { read_ptx_sreg_nctaid_y() as usize }
-    }
-    pub fn z() -> usize {
-        unsafe { read_ptx_sreg_nctaid_z() as usize }
-    }
-}
-
-pub fn laneid() -> usize {
-    unsafe { read_nvvm_read_ptx_sreg_laneid() as usize }
-}
-
-pub fn syncthreads() {
-    unsafe {
-        // core::intrinsics::atomic_singlethreadfence();
-        __syncthreads();
-        // core::intrinsics::atomic_singlethreadfence();
-    }
-}
-
-pub fn syncthreads_or(test: bool) -> bool {
-    unsafe {
-        // core::intrinsics::atomic_singlethreadfence();
-        let b = __syncthreads_or(if test { 1 } else { 0 }) != 0;
-        // core::intrinsics::atomic_singlethreadfence();
-        b
-    }
-}
-
-pub fn syncthreads_count(test: bool) -> usize {
-    unsafe {
-        // core::intrinsics::atomic_singlethreadfence();
-        let c = __syncthreads_count(if test { 1 } else { 0 }) as usize;
-        // core::intrinsics::atomic_singlethreadfence();
-        c
-    }
-}
 
 pub const ALL_MEMBER_MASK: u32 = 0xffffffff;
 
-pub trait Shuffle {
-    fn shfl(self, mask: u32, src_lane: u32) -> Self;
-    fn shfl_down(self, mask: u32, delta: u32) -> Self;
-    fn shfl_up(self, mask: u32, delta: u32) -> Self;
-    fn shfl_bfly(self, mask: u32, lane_mask: u32) -> Self;
+extern "C" {
+    #[link_name = "llvm.nvvm.atomic.load.add.f32.p0f32"]
+    pub fn atomic_load_add_f32(address: *mut f32, val: f32) -> f32;
+    #[link_name = "llvm.nvvm.atomic.load.add.f64.p0f64"]
+    pub fn atomic_load_add_f64(address: *mut f64, val: f64) -> f64;
+
+    #[link_name = "llvm.nvvm.atomic.load.inc.32.p0i32"]
+    pub fn atomic_load_inc_32(address: *mut u32, val: u32) -> u32;
+    #[link_name = "llvm.nvvm.atomic.load.dec.32.p0i32"]
+    pub fn atomic_load_dec_32(address: *mut u32, val: u32) -> u32;
+
+    #[link_name = "llvm.nvvm.vote.all.sync"]
+    fn vote_all_sync(membermask: u32, pred: bool) -> bool;
+    #[link_name = "llvm.nvvm.vote.any.sync"]
+    fn vote_any_sync(membermask: u32, pred: bool) -> bool;
+    #[link_name = "llvm.nvvm.vote.uni.sync"]
+    fn vote_uni_sync(membermask: u32, pred: bool) -> bool;
+    #[link_name = "llvm.nvvm.vote.ballot.sync"]
+    fn vote_ballot_sync(membermask: u32, pred: bool) -> u32;
+
+    #[link_name = "llvm.nvvm.match.any.sync.i32"]
+    fn match_any_i32_sync(membermask: u32, value: u32) -> u32;
+    #[link_name = "llvm.nvvm.match.any.sync.i64"]
+    fn match_any_i64_sync(membermask: u32, value: u64) -> u32;
+
+    #[link_name = "llvm.nvvm.match.all.sync.i32p"]
+    fn match_all_i32_sync(membermask: u32, value: u32) -> (u32, bool);
+    #[link_name = "llvm.nvvm.match.all.sync.i64p"]
+    fn match_all_i64_sync(membermask: u32, value: u64) -> (u32, bool);
 }
 
-impl Shuffle for i32 {
-    fn shfl(self, mask: u32, src_lane: u32) -> Self {
-        unsafe { shfl_sync_i32(mask, self, src_lane, 0x1f) }
-    }
+/// true if the source predicates is true for all thread in %membermask, false otherwise
+pub fn vote_all(membermask: u32, pred: bool) -> bool {
+    unsafe { vote_all_sync(membermask, pred) }
+}
 
-    fn shfl_down(self, mask: u32, delta: u32) -> Self {
-        unsafe { shfl_down_sync_i32(mask, self, delta, 0x1f) }
-    }
+/// true if the source predicate is true for any thread in %membermask, false otherwise
+pub fn vote_any(membermask: u32, pred: bool) -> bool {
+    unsafe { vote_any_sync(membermask, pred) }
+}
 
-    fn shfl_up(self, mask: u32, delta: u32) -> Self {
-        unsafe { shfl_up_sync_i32(mask, self, delta, 0) }
-    }
+/// true if the source predicates are the same for all thread in %membermask, false otherwise
+pub fn vote_eq(membermask: u32, pred: bool) -> bool {
+    unsafe { vote_uni_sync(membermask, pred) }
+}
 
-    fn shfl_bfly(self, mask: u32, lane_mask: u32) -> Self {
-        unsafe { shfl_bfly_sync_i32(mask, self, lane_mask, 0x1f) }
+/// warp mask ballot data, containing the predicate value from each thread in %membermask
+pub fn vote_ballot(membermask: u32, pred: bool) -> u32 {
+    unsafe { vote_ballot_sync(membermask, pred) }
+}
+
+pub trait Match: Sized {
+    fn match_any(self, membermask: u32) -> u32;
+    fn match_all(self, membermask: u32) -> (u32, bool);
+}
+
+impl Match for u32 {
+    fn match_any(self, membermask: u32) -> u32 {
+        unsafe { match_any_i32_sync(membermask, self) }
+    }
+    fn match_all(self, membermask: u32) -> (u32, bool) {
+        unsafe { match_all_i32_sync(membermask, self) }
     }
 }
 
-impl Shuffle for f32 {
-    fn shfl(self, mask: u32, src_lane: u32) -> Self {
-        unsafe { shfl_sync_f32(mask, self, src_lane, 0x1f) }
+impl Match for i32 {
+    fn match_any(self, membermask: u32) -> u32 {
+        unsafe { match_any_i32_sync(membermask, transmute(self)) }
     }
-
-    fn shfl_down(self, mask: u32, delta: u32) -> Self {
-        unsafe { shfl_down_sync_f32(mask, self, delta, 0x1f) }
+    fn match_all(self, membermask: u32) -> (u32, bool) {
+        unsafe { match_all_i32_sync(membermask, transmute(self)) }
     }
+}
 
-    fn shfl_up(self, mask: u32, delta: u32) -> Self {
-        unsafe { shfl_up_sync_f32(mask, self, delta, 0) }
+impl Match for f32 {
+    fn match_any(self, membermask: u32) -> u32 {
+        unsafe { match_any_i32_sync(membermask, transmute(self)) }
     }
+    fn match_all(self, membermask: u32) -> (u32, bool) {
+        unsafe { match_all_i32_sync(membermask, transmute(self)) }
+    }
+}
 
-    fn shfl_bfly(self, mask: u32, lane_mask: u32) -> Self {
-        unsafe { shfl_bfly_sync_f32(mask, self, lane_mask, 0x1f) }
+impl Match for u64 {
+    fn match_any(self, membermask: u32) -> u32 {
+        unsafe { match_any_i64_sync(membermask, self) }
+    }
+    fn match_all(self, membermask: u32) -> (u32, bool) {
+        unsafe { match_all_i64_sync(membermask, self) }
+    }
+}
+
+impl Match for i64 {
+    fn match_any(self, membermask: u32) -> u32 {
+        unsafe { match_any_i64_sync(membermask, transmute(self)) }
+    }
+    fn match_all(self, membermask: u32) -> (u32, bool) {
+        unsafe { match_all_i64_sync(membermask, transmute(self)) }
+    }
+}
+
+impl Match for f64 {
+    fn match_any(self, membermask: u32) -> u32 {
+        unsafe { match_any_i64_sync(membermask, transmute(self)) }
+    }
+    fn match_all(self, membermask: u32) -> (u32, bool) {
+        unsafe { match_all_i64_sync(membermask, transmute(self)) }
     }
 }
 
@@ -246,7 +171,9 @@ pub unsafe fn dynamic_shared_memory() -> (*mut (), usize) {
     (shared_ptr, dyn_mem_size as usize)
 }
 
-pub unsafe fn dynamic_shared_array<T: 'static + Sized + Send + Sync>(n: usize) -> Option<NonNull<[T]>> {
+pub unsafe fn dynamic_shared_array<T: 'static + Sized + Send + Sync>(
+    n: usize,
+) -> Option<NonNull<[T]>> {
     let mut shared_ptr;
     let mut dyn_mem_size: u32;
     asm!(
@@ -256,7 +183,9 @@ pub unsafe fn dynamic_shared_array<T: 'static + Sized + Send + Sync>(n: usize) -
         options(pure, nomem, nostack, preserves_flags)
     );
     if n * core::mem::size_of::<T>() <= dyn_mem_size as usize {
-        Some(NonNull::new_unchecked(core::ptr::slice_from_raw_parts_mut(shared_ptr, n)))
+        Some(NonNull::new_unchecked(core::ptr::slice_from_raw_parts_mut(
+            shared_ptr, n,
+        )))
     } else {
         None
     }

@@ -1,18 +1,19 @@
 use core::ops::*;
 
 macro_rules! fast_math {
-    ($slow:expr; $fast:expr) => {
+    ($slow:expr; $fast:expr) => {{
+        #[cfg(feature = "fast-math")]
         {
-            #[cfg(feature="fast-math")] {
-                unsafe { $fast }
-            } #[cfg(not(feature="fast-math"))] {
-                $slow
-            }
+            unsafe { $fast }
         }
-    };
+        #[cfg(not(feature = "fast-math"))]
+        {
+            $slow
+        }
+    }};
 }
 
-#[cfg(feature="fast-math")]
+#[cfg(feature = "fast-math")]
 extern "C" {
     #[link_name = "llvm.nvvm.sqrt.approx.ftz.f"]
     fn sqrt_approx(v: f32) -> f32;
@@ -21,7 +22,6 @@ extern "C" {
     pub fn rsqrt_approx(v: f32) -> f32;
     #[link_name = "llvm.nvvm.div.approx.ftz.f"]
     pub fn div_approx(l: f32, r: f32) -> f32;
-
 
     #[link_name = "llvm.nvvm.sin.approx.ftz.f"]
     fn sin_approx(v: f32) -> f32;
@@ -35,22 +35,22 @@ extern "C" {
 }
 
 pub trait Float:
-'static
-+ Copy
-+ Clone
-+ PartialEq
-+ PartialOrd
-+ Neg<Output=Self>
-+ Add<Output=Self>
-+ Sub<Output=Self>
-+ Mul<Output=Self>
-+ Div<Output=Self>
-+ Rem<Output=Self>
-+ AddAssign
-+ SubAssign
-+ MulAssign
-+ DivAssign
-+ RemAssign
+    'static
+    + Copy
+    + Clone
+    + PartialEq
+    + PartialOrd
+    + Neg<Output = Self>
+    + Add<Output = Self>
+    + Sub<Output = Self>
+    + Mul<Output = Self>
+    + Div<Output = Self>
+    + Rem<Output = Self>
+    + AddAssign
+    + SubAssign
+    + MulAssign
+    + DivAssign
+    + RemAssign
 {
     const ZERO: Self;
     const ONE: Self;
@@ -70,7 +70,11 @@ pub trait Float:
     fn div_euclid(self, rhs: Self) -> Self {
         let q = (self / rhs).trunc();
         if self % rhs < Self::ZERO {
-            return if rhs > Self::ZERO { q - Self::ONE } else { q + Self::ONE };
+            return if rhs > Self::ZERO {
+                q - Self::ONE
+            } else {
+                q + Self::ONE
+            };
         }
         q
     }
@@ -114,7 +118,11 @@ pub trait Float:
     }
     fn rem_euclid(self, rhs: Self) -> Self {
         let r = self % rhs;
-        if r < Self::ZERO { r + rhs.abs() } else { r }
+        if r < Self::ZERO {
+            r + rhs.abs()
+        } else {
+            r
+        }
     }
     fn round(self) -> Self;
     fn rsqrt(self) -> Self;
@@ -267,7 +275,11 @@ impl Float for f32 {
     }
 
     fn signum(self) -> Self {
-        if self.is_nan() { Self::NAN } else { 1.0_f32.copysign(self) }
+        if self.is_nan() {
+            Self::NAN
+        } else {
+            1.0_f32.copysign(self)
+        }
     }
 
     fn sin(self) -> Self {
