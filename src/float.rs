@@ -1,25 +1,29 @@
 use core::ops::*;
+pub use num_traits::{float::FloatCore, Float, Zero, One, Num, ToPrimitive, NumCast};
 
-macro_rules! fast_math {
-    ($slow:expr; $fast:expr) => {{
-        #[cfg(feature = "fast-math")]
-        {
-            unsafe { $fast }
-        }
-        #[cfg(not(feature = "fast-math"))]
-        {
-            $slow
-        }
-    }};
-}
-
-#[cfg(feature = "fast-math")]
 extern "C" {
+    // #[link_name = "llvm.nvvm.add.rn.ftz.f"]
+    // fn add_rn_ftz(lhs: f32, rhs: f32) -> f32;
+    // #[link_name = "llvm.nvvm.sub.rn.ftz.f"]
+    // fn sub_rn_ftz(lhs: f32, rhs: f32) -> f32;
+    // #[link_name = "llvm.nvvm.mul.rn.ftz.f"]
+    // fn mul_rn_ftz(lhs: f32, rhs: f32) -> f32;
+    #[link_name = "llvm.nvvm.fma.rn.ftz.f"]
+    fn fma_rn_ftz(a: f32, b: f32, c: f32) -> f32;
+
+    #[link_name = "llvm.nvvm.rcp.approx.ftz.f"]
+    fn recip_approx(v: f32) -> f32;
+    #[link_name = "llvm.nvvm.rcp.approx.ftz.d"]
+    fn recip_approx_f64(v: f64) -> f64;
+
     #[link_name = "llvm.nvvm.sqrt.approx.ftz.f"]
     fn sqrt_approx(v: f32) -> f32;
 
     #[link_name = "llvm.nvvm.rsqrt.approx.ftz.f"]
     pub fn rsqrt_approx(v: f32) -> f32;
+    #[link_name = "llvm.nvvm.rsqrt.approx.d"]
+    pub fn rsqrt_approx_f64(v: f64) -> f64;
+
     #[link_name = "llvm.nvvm.div.approx.ftz.f"]
     pub fn div_approx(l: f32, r: f32) -> f32;
 
@@ -30,292 +34,628 @@ extern "C" {
 
     #[link_name = "llvm.nvvm.ex2.approx.ftz.f"]
     fn ex2_approx(v: f32) -> f32;
+    #[link_name = "llvm.nvvm.ex2.approx.d"]
+    fn ex2_approx_f64(v: f64) -> f64;
     #[link_name = "llvm.nvvm.lg2.approx.ftz.f"]
     fn lg2_approx(v: f32) -> f32;
+    #[link_name = "llvm.nvvm.lg2.approx.ftz.d"]
+    fn lg2_approx_f64(v: f64) -> f64;
 }
 
-pub trait Float:
-    'static
-    + Copy
-    + Clone
-    + PartialEq
-    + PartialOrd
-    + Neg<Output = Self>
-    + Add<Output = Self>
-    + Sub<Output = Self>
-    + Mul<Output = Self>
-    + Div<Output = Self>
-    + Rem<Output = Self>
-    + AddAssign
-    + SubAssign
-    + MulAssign
-    + DivAssign
-    + RemAssign
+pub trait FastNum:
+    'static + Sized + Copy + PartialOrd + PartialEq + FloatCore + Float
 {
-    const ZERO: Self;
-    const ONE: Self;
-    fn abs(self) -> Self;
-    fn acos(self) -> Self;
-    fn acosh(self) -> Self;
-    fn asin(self) -> Self;
-    fn asinh(self) -> Self;
-    fn atan(self) -> Self;
-    fn atan2(self, other: Self) -> Self;
-    fn atanh(self) -> Self;
-    fn cbrt(self) -> Self;
-    fn ceil(self) -> Self;
-    fn copysign(self, sign: Self) -> Self;
-    fn cos(self) -> Self;
-    fn cosh(self) -> Self;
-    fn div_euclid(self, rhs: Self) -> Self {
-        let q = (self / rhs).trunc();
-        if self % rhs < Self::ZERO {
-            return if rhs > Self::ZERO {
-                q - Self::ONE
-            } else {
-                q + Self::ONE
-            };
-        }
-        q
+    fn fma(self, b: Self, c: Self) -> Self;
+    fn fast_div(self, rhs: Self) -> Self;
+    fn fast_recip(self) -> Self;
+    fn fast_sqrt(self) -> Self;
+    fn fast_sin(self) -> Self;
+    fn fast_cos(self) -> Self;
+    fn fast_rsqrt(self) -> Self;
+    fn fast_log2(self) -> Self;
+    fn fast_exp2(self) -> Self;
+
+    fn fast_log10(self) -> Self;
+    fn fast_ln(self) -> Self;
+    fn fast_exp(self) -> Self;
+
+    fn fast_abs(self) -> Self;
+    fn fast_copysign(self, other: Self) -> Self;
+    fn fast_trunc(self) -> Self;
+    fn fast_fract(self) -> Self {
+        self - self.fast_trunc()
     }
-    fn exp(self) -> Self;
-    fn exp2(self) -> Self;
-    fn exp_m1(self) -> Self;
-    fn floor(self) -> Self;
-    fn fract(self) -> Self {
-        self - self.trunc()
-    }
-    fn hypot(self, other: Self) -> Self;
-    fn ln(self) -> Self;
-    fn ln_1p(self) -> Self;
-    fn log(self, base: Self) -> Self {
-        self.log2() / base.log2()
-    }
-    fn log10(self) -> Self;
-    fn log2(self) -> Self;
-    fn mul_add(self, a: Self, b: Self) -> Self;
-    fn powf(self, n: Self) -> Self;
-    /// WARNING: Float::powi(0, 0) = 1, while this is mathematically undefined,
-    /// its the convention most programming languages & IEE 754-2008 use
-    fn powi(self, mut n: i32) -> Self {
-        if n == 0 {
-            return Self::ONE;
-        }
-        let mut x = self;
-        if n < 0 {
-            n = -n;
-            x = Self::ONE / x;
-        }
-        let mut y = Self::ONE;
-        while n > 1 {
-            if n & 1 == 1 {
-                y *= x;
-            }
-            x *= x;
-            n >>= 1;
-        }
-        x * y
-    }
-    fn rem_euclid(self, rhs: Self) -> Self {
-        let r = self % rhs;
-        if r < Self::ZERO {
-            r + rhs.abs()
-        } else {
-            r
-        }
-    }
-    fn round(self) -> Self;
-    fn rsqrt(self) -> Self;
-    fn signum(self) -> Self;
-    fn sin(self) -> Self;
-    fn sin_cos(self) -> (Self, Self);
-    fn sinh(self) -> Self;
-    fn sqrt(self) -> Self;
-    fn tan(self) -> Self;
-    fn tanh(self) -> Self;
-    fn trunc(self) -> Self;
+    fn fast_ceil(self) -> Self;
+    fn fast_floor(self) -> Self;
 }
 
-impl Float for f32 {
-    const ZERO: Self = 0f32;
-    const ONE: Self = 1f32;
+impl FastNum for f32 {
+    fn fma(self, b: Self, c: Self) -> Self {
+        unsafe { fma_rn_ftz(self, b, c) }
+    }
 
-    fn abs(self) -> Self {
+    fn fast_div(self, rhs: Self) -> Self {
+        unsafe { div_approx(self, rhs) }
+    }
+
+    fn fast_recip(self) -> Self {
+        unsafe { recip_approx(self) }
+    }
+
+    fn fast_sqrt(self) -> Self {
+        unsafe { sqrt_approx(self) }
+    }
+
+    fn fast_sin(self) -> Self {
+        unsafe { sin_approx(self) }
+    }
+
+    fn fast_cos(self) -> Self {
+        unsafe { cos_approx(self) }
+    }
+
+    fn fast_rsqrt(self) -> Self {
+        unsafe { rsqrt_approx(self) }
+    }
+
+    fn fast_log2(self) -> Self {
+        unsafe { lg2_approx(self) }
+    }
+
+    fn fast_exp2(self) -> Self {
+        unsafe { ex2_approx(self) }
+    }
+
+    fn fast_log10(self) -> Self {
+        const RECIP_LOG2_10: f32 = 1f32 / core::f32::consts::LOG2_10;
+        self.fast_log2() * RECIP_LOG2_10
+    }
+
+    fn fast_ln(self) -> Self {
+        const RECIP_LOG2_E: f32 = 1f32 / core::f32::consts::LOG2_E;
+        self.fast_log2() * RECIP_LOG2_E
+    }
+
+    fn fast_exp(self) -> Self {
+        (self * core::f32::consts::LOG2_E).fast_exp2()
+    }
+
+    fn fast_abs(self) -> Self {
         unsafe { core::intrinsics::fabsf32(self) }
     }
 
-    fn acos(self) -> Self {
-        libm::acosf(self)
+    fn fast_copysign(self, other: Self) -> Self {
+        unsafe { core::intrinsics::copysignf32(self, other) }
     }
 
-    fn acosh(self) -> Self {
-        libm::acoshf(self)
+    fn fast_trunc(self) -> Self {
+        unsafe { core::intrinsics::truncf32(self) }
     }
 
-    fn asin(self) -> Self {
-        libm::asinf(self)
-    }
-
-    fn asinh(self) -> Self {
-        libm::asinhf(self)
-    }
-
-    fn atan(self) -> Self {
-        libm::atanf(self)
-    }
-
-    fn atan2(self, other: Self) -> Self {
-        libm::atan2f(self, other)
-    }
-
-    fn atanh(self) -> Self {
-        libm::atanhf(self)
-    }
-
-    fn cbrt(self) -> Self {
-        libm::cbrtf(self)
-    }
-
-    fn ceil(self) -> Self {
+    fn fast_ceil(self) -> Self {
         unsafe { core::intrinsics::ceilf32(self) }
     }
 
-    fn copysign(self, sign: Self) -> Self {
-        unsafe { core::intrinsics::copysignf32(self, sign) }
+    fn fast_floor(self) -> Self {
+        unsafe { core::intrinsics::floorf32(self) }
+    }
+}
+
+impl FastNum for f64 {
+    fn fma(self, b: Self, c: Self) -> Self {
+        unsafe { core::intrinsics::fmaf64(self, b, c) }
     }
 
-    fn cos(self) -> Self {
-        fast_math!(
-            libm::cosf(self);
-            cos_approx(self)
-        )
+    fn fast_div(self, rhs: Self) -> Self {
+        self * rhs.fast_recip()
     }
 
-    fn cosh(self) -> Self {
-        libm::coshf(self)
+    fn fast_recip(self) -> Self {
+        unsafe { recip_approx_f64(self) }
+    }
+
+    fn fast_sqrt(self) -> Self {
+        unsafe { core::intrinsics::sqrtf64(self) }
+    }
+
+    fn fast_sin(self) -> Self {
+        libm::sin(self)
+    }
+
+    fn fast_cos(self) -> Self {
+        libm::cos(self)
+    }
+
+    fn fast_rsqrt(self) -> Self {
+        unsafe { rsqrt_approx_f64(self) }
+    }
+
+    fn fast_log2(self) -> Self {
+        // libm::log2(self)
+        unsafe { lg2_approx_f64(self) }
+    }
+
+    fn fast_exp2(self) -> Self {
+        // libm::exp2(self)
+        unsafe { ex2_approx_f64(self) }
+    }
+
+    fn fast_log10(self) -> Self {
+        // libm::log10(self)
+        const RECIP_LOG2_10: f64 = 1f64 / core::f64::consts::LOG2_10;
+        self.fast_log2() * RECIP_LOG2_10
+    }
+
+    fn fast_ln(self) -> Self {
+        // libm::log(self)
+        const RECIP_LOG2_E: f64 = 1f64 / core::f64::consts::LOG2_E;
+        self.fast_log2() * RECIP_LOG2_E
+    }
+
+    fn fast_exp(self) -> Self {
+        // libm::exp(self)
+        (self * core::f64::consts::LOG2_E).fast_exp2()
+    }
+
+    fn fast_abs(self) -> Self {
+        unsafe { core::intrinsics::fabsf64(self) }
+    }
+
+    fn fast_copysign(self, other: Self) -> Self {
+        unsafe { core::intrinsics::copysignf64(self, other) }
+    }
+
+    fn fast_trunc(self) -> Self {
+        unsafe { core::intrinsics::truncf64(self) }
+    }
+
+    fn fast_ceil(self) -> Self {
+        unsafe { core::intrinsics::ceilf64(self) }
+    }
+
+    fn fast_floor(self) -> Self {
+        unsafe { core::intrinsics::floorf64(self) }
+    }
+}
+
+#[repr(transparent)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialOrd,
+    PartialEq,
+    From,
+    Deref,
+    DerefMut,
+    Neg,
+    Add,
+    AddAssign,
+    Sub,
+    SubAssign,
+    Mul,
+    MulAssign,
+    Rem,
+    RemAssign,
+)]
+#[mul(forward)]
+#[mul_assign(forward)]
+#[rem(forward)]
+#[rem_assign(forward)]
+pub struct FastFloat<F: FastNum>(F);
+
+impl<F: FastNum> Div for FastFloat<F> {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        Self(self.fast_div(*rhs))
+    }
+}
+
+impl<F: FastNum> DivAssign for FastFloat<F> {
+    fn div_assign(&mut self, rhs: Self) {
+        *self = *self / rhs;
+    }
+}
+
+impl<F: FastNum> FastFloat<F> {
+    pub fn rsqrt(self) -> Self {
+        Self(self.fast_rsqrt())
+    }
+
+    pub fn copysign(self, other: Self) -> Self {
+        Self(self.fast_copysign(*other))
+    }
+}
+
+impl<F: FastNum> Zero for FastFloat<F> {
+    fn zero() -> Self {
+        Self(Zero::zero())
+    }
+
+    fn is_zero(&self) -> bool {
+        Zero::is_zero(&self.0)
+    }
+}
+
+impl<F: FastNum> One for FastFloat<F> {
+    fn one() -> Self {
+        Self(One::one())
+    }
+}
+
+impl<F: FastNum> Num for FastFloat<F> {
+    type FromStrRadixErr = <F as Num>::FromStrRadixErr;
+
+    fn from_str_radix(str: &str, radix: u32) -> Result<Self, Self::FromStrRadixErr> {
+        Num::from_str_radix(str, radix).map(FastFloat)
+    }
+}
+
+impl<F: FastNum> ToPrimitive for FastFloat<F> {
+    fn to_isize(&self) -> Option<isize> {
+        ToPrimitive::to_isize(&self.0)
+    }
+
+    fn to_i8(&self) -> Option<i8> {
+        ToPrimitive::to_i8(&self.0)
+    }
+
+    fn to_i16(&self) -> Option<i16> {
+        ToPrimitive::to_i16(&self.0)
+    }
+
+    fn to_i32(&self) -> Option<i32> {
+        ToPrimitive::to_i32(&self.0)
+    }
+
+    fn to_i64(&self) -> Option<i64> {
+        ToPrimitive::to_i64(&self.0)
+    }
+
+    fn to_i128(&self) -> Option<i128> {
+        ToPrimitive::to_i128(&self.0)
+    }
+
+    fn to_usize(&self) -> Option<usize> {
+        ToPrimitive::to_usize(&self.0)
+    }
+
+    fn to_u8(&self) -> Option<u8> {
+        ToPrimitive::to_u8(&self.0)
+    }
+
+    fn to_u16(&self) -> Option<u16> {
+        ToPrimitive::to_u16(&self.0)
+    }
+
+    fn to_u32(&self) -> Option<u32> {
+        ToPrimitive::to_u32(&self.0)
+    }
+
+    fn to_u64(&self) -> Option<u64> {
+        ToPrimitive::to_u64(&self.0)
+    }
+
+    fn to_u128(&self) -> Option<u128> {
+        ToPrimitive::to_u128(&self.0)
+    }
+
+    fn to_f32(&self) -> Option<f32> {
+        ToPrimitive::to_f32(&self.0)
+    }
+
+    fn to_f64(&self) -> Option<f64> {
+        ToPrimitive::to_f64(&self.0)
+    }
+}
+
+impl<F: FastNum> NumCast for FastFloat<F> {
+    fn from<T: ToPrimitive>(n: T) -> Option<Self> {
+        NumCast::from(n).map(Self)
+    }
+}
+
+impl<F: FastNum> FloatCore for FastFloat<F> {
+    fn infinity() -> Self {
+        Self(FloatCore::infinity())
+    }
+
+    fn neg_infinity() -> Self {
+        Self(FloatCore::neg_infinity())
+    }
+
+    fn nan() -> Self {
+        Self(FloatCore::nan())
+    }
+
+    fn neg_zero() -> Self {
+        Self(FloatCore::neg_zero())
+    }
+
+    fn min_value() -> Self {
+        Self(FloatCore::min_value())
+    }
+
+    fn min_positive_value() -> Self {
+        Self(FloatCore::min_positive_value())
+    }
+
+    fn epsilon() -> Self {
+        Self(FloatCore::epsilon())
+    }
+
+    fn max_value() -> Self {
+        Self(FloatCore::max_value())
+    }
+
+    fn classify(self) -> core::num::FpCategory {
+        FloatCore::classify(*self)
+    }
+
+    fn to_degrees(self) -> Self {
+        Self(FloatCore::to_degrees(*self))
+    }
+
+    fn to_radians(self) -> Self {
+        Self(FloatCore::to_radians(*self))
+    }
+
+    fn integer_decode(self) -> (u64, i16, i8) {
+        FloatCore::integer_decode(*self)
+    }
+
+    fn abs(self) -> Self {
+        Self(self.fast_abs())
+    }
+
+    fn floor(self) -> Self {
+        Self(self.fast_floor())
+    }
+
+    fn ceil(self) -> Self {
+        Self(self.fast_ceil())
+    }
+
+    fn trunc(self) -> Self {
+        Self(self.fast_trunc())
+    }
+
+    fn fract(self) -> Self {
+        Self(self.fast_fract())
+    }
+
+    fn recip(self) -> Self {
+        Self(self.fast_recip())
+    }
+}
+
+impl<F: FastNum> Float for FastFloat<F> {
+    fn nan() -> Self {
+        FloatCore::nan()
+    }
+
+    fn infinity() -> Self {
+        FloatCore::infinity()
+    }
+
+    fn neg_infinity() -> Self {
+        FloatCore::neg_infinity()
+    }
+
+    fn neg_zero() -> Self {
+        FloatCore::neg_zero()
+    }
+
+    fn min_value() -> Self {
+        FloatCore::min_value()
+    }
+
+    fn min_positive_value() -> Self {
+        FloatCore::min_positive_value()
+    }
+
+    fn max_value() -> Self {
+        FloatCore::max_value()
+    }
+
+    fn is_nan(self) -> bool {
+        FloatCore::is_nan(self)
+    }
+
+    fn is_infinite(self) -> bool {
+        FloatCore::is_infinite(self)
+    }
+
+    fn is_finite(self) -> bool {
+        FloatCore::is_finite(self)
+    }
+
+    fn is_normal(self) -> bool {
+        FloatCore::is_normal(self)
+    }
+
+    fn classify(self) -> core::num::FpCategory {
+        FloatCore::classify(self)
+    }
+
+    fn floor(self) -> Self {
+        FloatCore::floor(self)
+    }
+
+    fn ceil(self) -> Self {
+        FloatCore::ceil(self)
+    }
+
+    fn round(self) -> Self {
+        FloatCore::round(self)
+    }
+
+    fn trunc(self) -> Self {
+        Self(self.fast_trunc())
+    }
+
+    fn fract(self) -> Self {
+        Self(self.fast_fract())
+    }
+
+    fn abs(self) -> Self {
+        Self(self.fast_abs())
+    }
+
+    fn signum(self) -> Self {
+        FloatCore::signum(self)
+    }
+
+    fn is_sign_positive(self) -> bool {
+        FloatCore::is_sign_positive(self)
+    }
+
+    fn is_sign_negative(self) -> bool {
+        FloatCore::is_sign_negative(self)
+    }
+
+    fn mul_add(self, a: Self, b: Self) -> Self {
+        Self(self.fma(*a, *b))
+    }
+
+    fn recip(self) -> Self {
+        Self(self.fast_recip())
+    }
+
+    fn powi(self, n: i32) -> Self {
+        FloatCore::powi(self, n)
+    }
+
+    fn powf(self, n: Self) -> Self {
+        Self(Float::powf(self.0, n.0))
+    }
+
+    fn sqrt(self) -> Self {
+        Self(self.fast_sqrt())
     }
 
     fn exp(self) -> Self {
-        fast_math!(
-            libm::expf(self);
-            {
-                const RECIP_LN_2: f32 = 1f32 / core::f32::consts::LN_2;
-                ex2_approx(self * RECIP_LN_2)
-            }
-        )
+        Self(self.fast_exp())
     }
 
     fn exp2(self) -> Self {
-        fast_math!(
-            libm::exp2f(self);
-            ex2_approx(self)
+        Self(self.fast_exp2())
+    }
+
+    fn ln(self) -> Self {
+        Self(self.fast_ln())
+    }
+
+    fn log(self, base: Self) -> Self {
+        <Self as Float>::log2(self) / <Self as Float>::log2(base)
+    }
+
+    fn log2(self) -> Self {
+        Self(self.fast_log2())
+    }
+
+    fn log10(self) -> Self {
+        Self(self.fast_log10())
+    }
+
+    fn to_degrees(self) -> Self {
+        Self(FloatCore::to_degrees(*self))
+    }
+
+    fn to_radians(self) -> Self {
+        Self(FloatCore::to_radians(*self))
+    }
+
+    fn max(self, other: Self) -> Self {
+        Self(FloatCore::max(self.0, other.0))
+    }
+
+    fn min(self, other: Self) -> Self {
+        Self(FloatCore::min(self.0, other.0))
+    }
+
+    fn abs_sub(self, other: Self) -> Self {
+        Self(Float::abs_sub(self.0, other.0))
+    }
+
+    fn cbrt(self) -> Self {
+        Self(Float::cbrt(self.0))
+    }
+
+    fn hypot(self, other: Self) -> Self {
+        Self(Float::hypot(self.0, other.0))
+    }
+
+    fn sin(self) -> Self {
+        Self(self.fast_sin())
+    }
+
+    fn cos(self) -> Self {
+        Self(self.fast_cos())
+    }
+
+    fn tan(self) -> Self {
+        // <Self as Float>::sin(self) / <Self as Float>::cos(self)
+        Self(Float::tan(self.0))
+    }
+
+    fn asin(self) -> Self {
+        Self(Float::asin(self.0))
+    }
+
+    fn acos(self) -> Self {
+        Self(Float::acos(self.0))
+    }
+
+    fn atan(self) -> Self {
+        Self(Float::atan(self.0))
+    }
+
+    fn atan2(self, other: Self) -> Self {
+        Self(Float::atan2(self.0, other.0))
+    }
+
+    fn sin_cos(self) -> (Self, Self) {
+        (
+            <Self as Float>::sin(self),
+            <Self as Float>::cos(self),
         )
     }
 
     fn exp_m1(self) -> Self {
-        libm::expm1f(self)
-    }
-
-    fn floor(self) -> Self {
-        unsafe { core::intrinsics::floorf32(self) }
-    }
-
-    fn hypot(self, other: Self) -> Self {
-        libm::hypotf(self, other)
-    }
-
-    fn ln(self) -> Self {
-        fast_math!(
-            libm::logf(self);
-            {
-                const RECIP_LOG2_E: f32 = 1f32 / core::f32::consts::LOG2_E;
-                lg2_approx(self) * RECIP_LOG2_E
-            }
-        )
+        Self(Float::exp_m1(self.0))
     }
 
     fn ln_1p(self) -> Self {
-        libm::log1pf(self)
-    }
-
-    fn log10(self) -> Self {
-        fast_math!(
-            libm::log10f(self);
-            {
-                const RECIP_LOG2_10: f32 = 1f32 / core::f32::consts::LOG2_10;
-                lg2_approx(self) * RECIP_LOG2_10
-            }
-        )
-    }
-
-    fn log2(self) -> Self {
-        fast_math!(
-            libm::log2f(self);
-            lg2_approx(self)
-        )
-    }
-
-    fn mul_add(self, a: Self, b: Self) -> Self {
-        unsafe { core::intrinsics::fmaf32(self, a, b) }
-    }
-
-    fn powf(self, n: Self) -> Self {
-        libm::powf(self, n)
-    }
-
-    fn round(self) -> Self {
-        libm::roundf(self)
-    }
-
-    fn rsqrt(self) -> Self {
-        fast_math!(
-            1f32 / self.sqrt();
-            rsqrt_approx(self)
-        )
-    }
-
-    fn signum(self) -> Self {
-        if self.is_nan() {
-            Self::NAN
-        } else {
-            1.0_f32.copysign(self)
-        }
-    }
-
-    fn sin(self) -> Self {
-        fast_math!(
-            libm::sinf(self);
-            sin_approx(self)
-        )
-    }
-
-    fn sin_cos(self) -> (Self, Self) {
-        fast_math!(
-            libm::sincosf(self);
-            (sin_approx(self), cos_approx(self))
-        )
+        Self(Float::ln_1p(self.0))
     }
 
     fn sinh(self) -> Self {
-        libm::sinhf(self)
+        Self(Float::sinh(self.0))
     }
 
-    fn sqrt(self) -> Self {
-        fast_math!(
-            unsafe { core::intrinsics::sqrtf32(self) };
-            sqrt_approx(self)
-        )
-    }
-
-    fn tan(self) -> Self {
-        libm::tanf(self)
+    fn cosh(self) -> Self {
+        Self(Float::cosh(self.0))
     }
 
     fn tanh(self) -> Self {
-        libm::tanhf(self)
+        Self(Float::tanh(self.0))
     }
 
-    fn trunc(self) -> Self {
-        unsafe { core::intrinsics::truncf32(self) }
+    fn asinh(self) -> Self {
+        Self(Float::asinh(self.0))
+    }
+
+    fn acosh(self) -> Self {
+        Self(Float::acosh(self.0))
+    }
+
+    fn atanh(self) -> Self {
+        Self(Float::atanh(self.0))
+    }
+
+    fn integer_decode(self) -> (u64, i16, i8) {
+        FloatCore::integer_decode(self)
     }
 }

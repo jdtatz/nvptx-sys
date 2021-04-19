@@ -9,6 +9,8 @@
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
+#[macro_use]
+extern crate derive_more;
 
 // TODO: Documentation, active-mask, warp matrix ops, memory barriers, asynchronous copy,
 // builtin-redux, nanosleep, cfg guards for ptx isa version & sm version,
@@ -114,10 +116,10 @@ impl Match for i32 {
 
 impl Match for f32 {
     fn match_any(self, membermask: u32) -> u32 {
-        unsafe { match_any_i32_sync(membermask, transmute(self)) }
+        unsafe { match_any_i32_sync(membermask, self.to_bits()) }
     }
     // fn match_all(self, membermask: u32) -> (u32, bool) {
-    //     unsafe { match_all_i32_sync(membermask, transmute(self)) }
+    //     unsafe { match_all_i32_sync(membermask, self.to_bits()) }
     // }
 }
 
@@ -141,10 +143,10 @@ impl Match for i64 {
 
 impl Match for f64 {
     fn match_any(self, membermask: u32) -> u32 {
-        unsafe { match_any_i64_sync(membermask, transmute(self)) }
+        unsafe { match_any_i64_sync(membermask, self.to_bits()) }
     }
     // fn match_all(self, membermask: u32) -> (u32, bool) {
-    //     unsafe { match_all_i64_sync(membermask, transmute(self)) }
+    //     unsafe { match_all_i64_sync(membermask, self.to_bits()) }
     // }
 }
 
@@ -191,14 +193,14 @@ pub unsafe fn dynamic_shared_array<T: 'static + Sized + Send + Sync>(
     }
 }
 
-pub unsafe fn shared<T: 'static + Sized + Send + Sync>() -> *mut T {
-    let mut shared_ptr: *mut T;
-    asm!(
-        "{{ .shared .align {a} .b8 shared_value[{n}]; cvta.shared.u64 {ptr}, shared_value; }}",
-        a = const core::mem::align_of::<T>(),
-        n = const core::mem::size_of::<T>(),
-        ptr = out(reg64) shared_ptr,
-        options(nostack, preserves_flags)
-    );
-    shared_ptr
-}
+// pub unsafe fn shared<T: 'static + Sized + Send + Sync>() -> *mut T {
+//     let mut shared_ptr: *mut T;
+//     asm!(
+//         "{{ .shared .align {a} .b8 shared_value[{n}]; cvta.shared.u64 {ptr}, shared_value; }}",
+//         a = const core::mem::align_of::<T>(),
+//         n = const core::mem::size_of::<T>(),
+//         ptr = out(reg64) shared_ptr,
+//         options(nostack, preserves_flags)
+//     );
+//     shared_ptr
+// }
