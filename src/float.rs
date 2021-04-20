@@ -1,5 +1,5 @@
 use core::ops::*;
-pub use num_traits::{float::FloatCore, Float, Zero, One, Num, ToPrimitive, NumCast};
+pub use num_traits::{float::FloatCore, Float, Num, NumCast, One, ToPrimitive, Zero};
 
 extern "C" {
     // #[link_name = "llvm.nvvm.add.rn.ftz.f"]
@@ -8,45 +8,69 @@ extern "C" {
     // fn sub_rn_ftz(lhs: f32, rhs: f32) -> f32;
     // #[link_name = "llvm.nvvm.mul.rn.ftz.f"]
     // fn mul_rn_ftz(lhs: f32, rhs: f32) -> f32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.fma.rn.ftz.f"]
-    fn fma_rn_ftz(a: f32, b: f32, c: f32) -> f32;
+    pub fn fma_rn_ftz(a: f32, b: f32, c: f32) -> f32;
 
+    #[ffi_const]
     #[link_name = "llvm.nvvm.rcp.approx.ftz.f"]
     fn recip_approx(v: f32) -> f32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.rcp.approx.ftz.d"]
     fn recip_approx_f64(v: f64) -> f64;
 
+    #[ffi_const]
     #[link_name = "llvm.nvvm.sqrt.approx.ftz.f"]
     fn sqrt_approx(v: f32) -> f32;
 
+    #[ffi_const]
     #[link_name = "llvm.nvvm.rsqrt.approx.ftz.f"]
     pub fn rsqrt_approx(v: f32) -> f32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.rsqrt.approx.d"]
     pub fn rsqrt_approx_f64(v: f64) -> f64;
 
+    #[ffi_const]
     #[link_name = "llvm.nvvm.div.approx.ftz.f"]
     pub fn div_approx(l: f32, r: f32) -> f32;
 
+    #[ffi_const]
     #[link_name = "llvm.nvvm.sin.approx.ftz.f"]
     fn sin_approx(v: f32) -> f32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.cos.approx.ftz.f"]
     fn cos_approx(v: f32) -> f32;
 
+    #[ffi_const]
     #[link_name = "llvm.nvvm.ex2.approx.ftz.f"]
     fn ex2_approx(v: f32) -> f32;
-    #[link_name = "llvm.nvvm.ex2.approx.d"]
-    fn ex2_approx_f64(v: f64) -> f64;
+    // #[link_name = "llvm.nvvm.ex2.approx.d"]
+    // fn ex2_approx_f64(v: f64) -> f64;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.lg2.approx.ftz.f"]
     fn lg2_approx(v: f32) -> f32;
-    #[link_name = "llvm.nvvm.lg2.approx.ftz.d"]
-    fn lg2_approx_f64(v: f64) -> f64;
+    // #[link_name = "llvm.nvvm.lg2.approx.ftz.d"]
+    // fn lg2_approx_f64(v: f64) -> f64;
 }
 
-pub trait FastNum:
-    'static + Sized + Copy + PartialOrd + PartialEq + FloatCore + Float
-{
+pub trait FastNum: 'static + Sized + Copy + PartialOrd + PartialEq + FloatCore + Float {
     fn fma(self, b: Self, c: Self) -> Self;
-    fn fast_div(self, rhs: Self) -> Self;
+    fn fast_add(self, rhs: Self) -> Self {
+        unsafe { core::intrinsics::fadd_fast(self, rhs) }
+    }
+    fn fast_sub(self, rhs: Self) -> Self {
+        unsafe { core::intrinsics::fsub_fast(self, rhs) }
+    }
+    fn fast_mul(self, rhs: Self) -> Self {
+        unsafe { core::intrinsics::fmul_fast(self, rhs) }
+    }
+    fn fast_div(self, rhs: Self) -> Self {
+        // unsafe { core::intrinsics::fdiv_fast(self, rhs) }
+        self.fast_mul(rhs.fast_recip())
+    }
+    fn fast_rem(self, rhs: Self) -> Self {
+        unsafe { core::intrinsics::frem_fast(self, rhs) }
+    }
     fn fast_recip(self) -> Self;
     fn fast_sqrt(self) -> Self;
     fn fast_sin(self) -> Self;
@@ -71,11 +95,14 @@ pub trait FastNum:
 
 impl FastNum for f32 {
     fn fma(self, b: Self, c: Self) -> Self {
-        unsafe { fma_rn_ftz(self, b, c) }
+        // unsafe { fma_rn_ftz(self, b, c) }
+        unsafe { core::intrinsics::fmaf32(self, b, c) }
     }
 
     fn fast_div(self, rhs: Self) -> Self {
-        unsafe { div_approx(self, rhs) }
+        // unsafe { div_approx(self, rhs) }
+        unsafe { core::intrinsics::fdiv_fast(self, rhs) }
+        // self / rhs
     }
 
     fn fast_recip(self) -> Self {
@@ -84,6 +111,7 @@ impl FastNum for f32 {
 
     fn fast_sqrt(self) -> Self {
         unsafe { sqrt_approx(self) }
+        // unsafe { core::intrinsics::sqrtf32(self) }
     }
 
     fn fast_sin(self) -> Self {
@@ -146,10 +174,6 @@ impl FastNum for f64 {
         unsafe { core::intrinsics::fmaf64(self, b, c) }
     }
 
-    fn fast_div(self, rhs: Self) -> Self {
-        self * rhs.fast_recip()
-    }
-
     fn fast_recip(self) -> Self {
         unsafe { recip_approx_f64(self) }
     }
@@ -171,30 +195,30 @@ impl FastNum for f64 {
     }
 
     fn fast_log2(self) -> Self {
-        // libm::log2(self)
-        unsafe { lg2_approx_f64(self) }
+        libm::log2(self)
+        // unsafe { lg2_approx_f64(self) }
     }
 
     fn fast_exp2(self) -> Self {
-        // libm::exp2(self)
-        unsafe { ex2_approx_f64(self) }
+        libm::exp2(self)
+        // unsafe { ex2_approx_f64(self) }
     }
 
     fn fast_log10(self) -> Self {
-        // libm::log10(self)
-        const RECIP_LOG2_10: f64 = 1f64 / core::f64::consts::LOG2_10;
-        self.fast_log2() * RECIP_LOG2_10
+        libm::log10(self)
+        // const RECIP_LOG2_10: f64 = 1f64 / core::f64::consts::LOG2_10;
+        // self.fast_log2() * RECIP_LOG2_10
     }
 
     fn fast_ln(self) -> Self {
-        // libm::log(self)
-        const RECIP_LOG2_E: f64 = 1f64 / core::f64::consts::LOG2_E;
-        self.fast_log2() * RECIP_LOG2_E
+        libm::log(self)
+        // const RECIP_LOG2_E: f64 = 1f64 / core::f64::consts::LOG2_E;
+        // self.fast_log2() * RECIP_LOG2_E
     }
 
     fn fast_exp(self) -> Self {
-        // libm::exp(self)
-        (self * core::f64::consts::LOG2_E).fast_exp2()
+        libm::exp(self)
+        // (self * core::f64::consts::LOG2_E).fast_exp2()
     }
 
     fn fast_abs(self) -> Self {
@@ -221,28 +245,86 @@ impl FastNum for f64 {
 #[repr(transparent)]
 #[derive(
     Debug,
+    Display,
+    Binary,
+    Octal,
+    LowerHex,
+    UpperHex,
+    LowerExp,
+    UpperExp,
     Clone,
     Copy,
-    PartialOrd,
-    PartialEq,
     From,
     Deref,
     DerefMut,
     Neg,
-    Add,
-    AddAssign,
-    Sub,
-    SubAssign,
-    Mul,
-    MulAssign,
-    Rem,
-    RemAssign,
 )]
-#[mul(forward)]
-#[mul_assign(forward)]
-#[rem(forward)]
-#[rem_assign(forward)]
-pub struct FastFloat<F: FastNum>(F);
+pub struct FastFloat<F>(pub F);
+
+impl<F: FastNum> PartialOrd for FastFloat<F> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        if FloatCore::is_nan(*self) || FloatCore::is_nan(*other) {
+            unsafe { core::hint::unreachable_unchecked() }
+        } else if self.0 < other.0 {
+            Some(core::cmp::Ordering::Less)
+        } else if self.0 == other.0 {
+            Some(core::cmp::Ordering::Equal)
+        } else {
+            Some(core::cmp::Ordering::Greater)
+        }
+    }
+}
+
+impl<F: FastNum> PartialEq for FastFloat<F> {
+    fn eq(&self, other: &Self) -> bool {
+        if FloatCore::is_nan(*self) || FloatCore::is_nan(*other) {
+            unsafe { core::hint::unreachable_unchecked() }
+        }
+        self.0 == other.0
+    }
+}
+
+impl<F: FastNum> Add for FastFloat<F> {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.fast_add(*rhs))
+    }
+}
+
+impl<F: FastNum> AddAssign for FastFloat<F> {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = (*self).add(rhs);
+    }
+}
+
+impl<F: FastNum> Sub for FastFloat<F> {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.fast_sub(*rhs))
+    }
+}
+
+impl<F: FastNum> SubAssign for FastFloat<F> {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = (*self).sub(rhs);
+    }
+}
+
+impl<F: FastNum> Mul for FastFloat<F> {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self(self.fast_mul(*rhs))
+    }
+}
+
+impl<F: FastNum> MulAssign for FastFloat<F> {
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = (*self).mul(rhs);
+    }
+}
 
 impl<F: FastNum> Div for FastFloat<F> {
     type Output = Self;
@@ -254,7 +336,21 @@ impl<F: FastNum> Div for FastFloat<F> {
 
 impl<F: FastNum> DivAssign for FastFloat<F> {
     fn div_assign(&mut self, rhs: Self) {
-        *self = *self / rhs;
+        *self = (*self).div(rhs);
+    }
+}
+
+impl<F: FastNum> Rem for FastFloat<F> {
+    type Output = Self;
+
+    fn rem(self, rhs: Self) -> Self::Output {
+        Self(self.fast_rem(*rhs))
+    }
+}
+
+impl<F: FastNum> RemAssign for FastFloat<F> {
+    fn rem_assign(&mut self, rhs: Self) {
+        *self = (*self).rem(rhs);
     }
 }
 
@@ -425,6 +521,18 @@ impl<F: FastNum> FloatCore for FastFloat<F> {
         Self(self.fast_fract())
     }
 
+    fn is_nan(self) -> bool {
+        false
+    }
+
+    fn is_sign_positive(self) -> bool {
+        self >= Self::zero()
+    }
+
+    fn is_sign_negative(self) -> bool {
+        self < Self::zero()
+    }
+
     fn recip(self) -> Self {
         Self(self.fast_recip())
     }
@@ -560,23 +668,27 @@ impl<F: FastNum> Float for FastFloat<F> {
     }
 
     fn to_degrees(self) -> Self {
-        Self(FloatCore::to_degrees(*self))
+        FloatCore::to_degrees(self)
     }
 
     fn to_radians(self) -> Self {
-        Self(FloatCore::to_radians(*self))
+        FloatCore::to_radians(self)
     }
 
     fn max(self, other: Self) -> Self {
-        Self(FloatCore::max(self.0, other.0))
+        FloatCore::max(self, other)
     }
 
     fn min(self, other: Self) -> Self {
-        Self(FloatCore::min(self.0, other.0))
+        FloatCore::min(self, other)
     }
 
     fn abs_sub(self, other: Self) -> Self {
-        Self(Float::abs_sub(self.0, other.0))
+        if self <= other {
+            Self::zero()
+        } else {
+            self - other
+        }
     }
 
     fn cbrt(self) -> Self {
@@ -617,10 +729,7 @@ impl<F: FastNum> Float for FastFloat<F> {
     }
 
     fn sin_cos(self) -> (Self, Self) {
-        (
-            <Self as Float>::sin(self),
-            <Self as Float>::cos(self),
-        )
+        (<Self as Float>::sin(self), <Self as Float>::cos(self))
     }
 
     fn exp_m1(self) -> Self {
@@ -657,5 +766,105 @@ impl<F: FastNum> Float for FastFloat<F> {
 
     fn integer_decode(self) -> (u64, i16, i8) {
         FloatCore::integer_decode(self)
+    }
+}
+
+use float_eq::*;
+
+impl<F: FloatEqUlpsEpsilon> FloatEqUlpsEpsilon for FastFloat<F>
+where
+    UlpsEpsilon<F>: Sized,
+{
+    type UlpsEpsilon = FastFloat<UlpsEpsilon<F>>;
+}
+
+impl<F: FloatEqDebugUlpsDiff> FloatEqDebugUlpsDiff for FastFloat<F> {
+    type DebugUlpsDiff = FastFloat<DebugUlpsDiff<F>>;
+}
+
+impl<F> FloatEq for FastFloat<F>
+where
+    F: FloatEq + FloatEqUlpsEpsilon,
+    F::Epsilon: Sized,
+    UlpsEpsilon<F>: Sized,
+    UlpsEpsilon<F::Epsilon>: Sized,
+{
+    type Epsilon = FastFloat<F::Epsilon>;
+
+    fn eq_abs(&self, other: &Self, max_diff: &Self::Epsilon) -> bool {
+        self.0.eq_abs(&other.0, &max_diff.0)
+    }
+
+    fn eq_rmax(&self, other: &Self, max_diff: &Self::Epsilon) -> bool {
+        self.0.eq_rmax(&other.0, &max_diff.0)
+    }
+
+    fn eq_rmin(&self, other: &Self, max_diff: &Self::Epsilon) -> bool {
+        self.0.eq_rmin(&other.0, &max_diff.0)
+    }
+
+    fn eq_r1st(&self, other: &Self, max_diff: &Self::Epsilon) -> bool {
+        self.0.eq_r1st(&other.0, &max_diff.0)
+    }
+
+    fn eq_r2nd(&self, other: &Self, max_diff: &Self::Epsilon) -> bool {
+        self.0.eq_r2nd(&other.0, &max_diff.0)
+    }
+
+    fn eq_ulps(&self, other: &Self, max_diff: &UlpsEpsilon<Self::Epsilon>) -> bool {
+        self.0.eq_ulps(&other.0, &max_diff.0)
+    }
+}
+
+impl<F> AssertFloatEq for FastFloat<F>
+where
+    F: FloatEqUlpsEpsilon + AssertFloatEq + core::fmt::Debug,
+    F::Epsilon: Sized,
+    F::DebugEpsilon: Sized,
+    UlpsEpsilon<F>: Sized,
+    UlpsEpsilon<F::Epsilon>: Sized,
+    UlpsEpsilon<F::DebugEpsilon>: Sized,
+{
+    type DebugAbsDiff = FastFloat<F::DebugAbsDiff>;
+
+    type DebugEpsilon = FastFloat<F::DebugEpsilon>;
+
+    fn debug_abs_diff(&self, other: &Self) -> Self::DebugAbsDiff {
+        FastFloat(self.0.debug_abs_diff(&other.0))
+    }
+
+    fn debug_ulps_diff(&self, other: &Self) -> DebugUlpsDiff<Self::DebugAbsDiff> {
+        FastFloat(self.0.debug_ulps_diff(&other.0))
+    }
+
+    fn debug_abs_epsilon(&self, other: &Self, max_diff: &Self::Epsilon) -> Self::DebugEpsilon {
+        FastFloat(self.0.debug_abs_epsilon(&other.0, &max_diff.0))
+    }
+
+    fn debug_rmax_epsilon(&self, other: &Self, max_diff: &Self::Epsilon) -> Self::DebugEpsilon {
+        FastFloat(self.0.debug_rmax_epsilon(&other.0, &max_diff.0))
+    }
+
+    fn debug_rmin_epsilon(&self, other: &Self, max_diff: &Self::Epsilon) -> Self::DebugEpsilon {
+        FastFloat(self.0.debug_rmin_epsilon(&other.0, &max_diff.0))
+    }
+
+    fn debug_r1st_epsilon(&self, other: &Self, max_diff: &Self::Epsilon) -> Self::DebugEpsilon {
+        FastFloat(self.0.debug_r1st_epsilon(&other.0, &max_diff.0))
+    }
+
+    fn debug_r2nd_epsilon(&self, other: &Self, max_diff: &Self::Epsilon) -> Self::DebugEpsilon {
+        FastFloat(self.0.debug_r2nd_epsilon(&other.0, &max_diff.0))
+    }
+
+    fn debug_ulps_epsilon(
+        &self,
+        other: &Self,
+        max_diff: &UlpsEpsilon<Self::Epsilon>,
+    ) -> UlpsEpsilon<Self::DebugEpsilon>
+    where
+        UlpsEpsilon<Self::DebugEpsilon>: Sized,
+    {
+        FastFloat(self.0.debug_ulps_epsilon(&other.0, &max_diff.0))
     }
 }

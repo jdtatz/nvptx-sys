@@ -1,12 +1,17 @@
 extern "C" {
+    #[ffi_const]
     #[link_name = "llvm.nvvm.bar.warp.sync"]
     fn __warp_sync(membermask: u32);
+    #[ffi_const]
     #[link_name = "llvm.nvvm.barrier0"]
     fn __syncthreads();
+    #[ffi_const]
     #[link_name = "llvm.nvvm.barrier0.and"]
     fn __syncthreads_and(test: u32) -> u32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.barrier0.or"]
     fn __syncthreads_or(test: u32) -> u32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.barrier0.popc"]
     fn __syncthreads_count(test: u32) -> u32;
 }

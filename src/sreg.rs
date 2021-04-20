@@ -1,35 +1,49 @@
 extern "C" {
+    #[ffi_const]
     #[link_name = "llvm.nvvm.read.ptx.sreg.tid.x"]
     fn read_ptx_sreg_tid_x() -> u32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.read.ptx.sreg.tid.y"]
     fn read_ptx_sreg_tid_y() -> u32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.read.ptx.sreg.tid.z"]
     fn read_ptx_sreg_tid_z() -> u32;
 
+    #[ffi_const]
     #[link_name = "llvm.nvvm.read.ptx.sreg.ntid.x"]
     fn read_ptx_sreg_ntid_x() -> u32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.read.ptx.sreg.ntid.y"]
     fn read_ptx_sreg_ntid_y() -> u32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.read.ptx.sreg.ntid.z"]
     fn read_ptx_sreg_ntid_z() -> u32;
 
+    #[ffi_const]
     #[link_name = "llvm.nvvm.read.ptx.sreg.ctaid.x"]
     fn read_ptx_sreg_ctaid_x() -> u32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.read.ptx.sreg.ctaid.y"]
     fn read_ptx_sreg_ctaid_y() -> u32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.read.ptx.sreg.ctaid.z"]
     fn read_ptx_sreg_ctaid_z() -> u32;
 
+    #[ffi_const]
     #[link_name = "llvm.nvvm.read.ptx.sreg.nctaid.x"]
     fn read_ptx_sreg_nctaid_x() -> u32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.read.ptx.sreg.nctaid.y"]
     fn read_ptx_sreg_nctaid_y() -> u32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.read.ptx.sreg.nctaid.z"]
     fn read_ptx_sreg_nctaid_z() -> u32;
 
+    #[ffi_const]
     #[link_name = "llvm.nvvm.read.ptx.sreg.warpsize"]
     fn read_nvvm_read_ptx_sreg_warpsize() -> u32;
 
+    #[ffi_const]
     #[link_name = "llvm.nvvm.read.ptx.sreg.laneid"]
     fn read_nvvm_read_ptx_sreg_laneid() -> u32;
 }

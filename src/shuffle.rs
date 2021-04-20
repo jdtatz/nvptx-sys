@@ -1,19 +1,27 @@
 extern "C" {
+    #[ffi_const]
     #[link_name = "llvm.nvvm.shfl.sync.idx.i32"]
     pub fn shfl_idx_sync_i32(membermask: u32, val: u32, src_lane: u32, packing: u32) -> u32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.shfl.sync.down.i32"]
     pub fn shfl_down_sync_i32(membermask: u32, val: u32, delta: u32, packing: u32) -> u32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.shfl.sync.up.i32"]
     pub fn shfl_up_sync_i32(membermask: u32, val: u32, delta: u32, packing: u32) -> u32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.shfl.sync.bfly.i32"]
     pub fn shfl_bfly_sync_i32(membermask: u32, val: u32, lane_mask: u32, packing: u32) -> u32;
 
+    #[ffi_const]
     #[link_name = "llvm.nvvm.shfl.sync.idx.f32"]
     fn shfl_idx_sync_f32(membermask: u32, val: f32, src_lane: u32, packing: u32) -> f32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.shfl.sync.down.f32"]
     fn shfl_down_sync_f32(membermask: u32, val: f32, delta: u32, packing: u32) -> f32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.shfl.sync.up.f32"]
     fn shfl_up_sync_f32(membermask: u32, val: f32, delta: u32, packing: u32) -> f32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.shfl.sync.bfly.f32"]
     fn shfl_bfly_sync_f32(membermask: u32, val: f32, lane_mask: u32, packing: u32) -> f32;
 }

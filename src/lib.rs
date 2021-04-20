@@ -1,5 +1,5 @@
 #![no_std]
-#![feature(core_intrinsics, asm, global_asm, link_llvm_intrinsics)]
+#![feature(core_intrinsics, asm, global_asm, link_llvm_intrinsics, ffi_const)]
 #![cfg_attr(feature = "alloc", feature(alloc_error_handler))]
 #![cfg_attr(
     all(feature = "panic", feature = "alloc"),
@@ -51,17 +51,23 @@ extern "C" {
     #[link_name = "llvm.nvvm.atomic.load.dec.32.p0i32"]
     pub fn atomic_load_dec_32(address: *mut u32, val: u32) -> u32;
 
+    #[ffi_const]
     #[link_name = "llvm.nvvm.vote.all.sync"]
     fn vote_all_sync(membermask: u32, pred: bool) -> bool;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.vote.any.sync"]
     fn vote_any_sync(membermask: u32, pred: bool) -> bool;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.vote.uni.sync"]
     fn vote_uni_sync(membermask: u32, pred: bool) -> bool;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.vote.ballot.sync"]
     fn vote_ballot_sync(membermask: u32, pred: bool) -> u32;
 
+    #[ffi_const]
     #[link_name = "llvm.nvvm.match.any.sync.i32"]
     fn match_any_i32_sync(membermask: u32, value: u32) -> u32;
+    #[ffi_const]
     #[link_name = "llvm.nvvm.match.any.sync.i64"]
     fn match_any_i64_sync(membermask: u32, value: u64) -> u32;
 
