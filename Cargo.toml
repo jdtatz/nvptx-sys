@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 libm = "0.2"
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
-float_eq = { version = "0.5", default-features = false }
+float_eq = { version = "0.6", default-features = false }
 derive_more = "0.99"
 nvptx-vprintf = { path = "nvptx-vprintf" }
 
@@ -16,6 +16,7 @@ default = []
 panic = []
 alloc = []
 noisy-panics = ["panic"]
+i128 = ["num-traits/i128"]
 
 [workspace]
 members = ["nvptx-vprintf"]

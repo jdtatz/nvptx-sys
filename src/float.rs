@@ -409,6 +409,7 @@ impl<F: FastNum> ToPrimitive for FastFloat<F> {
         ToPrimitive::to_i64(&self.0)
     }
 
+    #[cfg(feature="i128")]
     fn to_i128(&self) -> Option<i128> {
         ToPrimitive::to_i128(&self.0)
     }
@@ -433,6 +434,7 @@ impl<F: FastNum> ToPrimitive for FastFloat<F> {
         ToPrimitive::to_u64(&self.0)
     }
 
+    #[cfg(feature="i128")]
     fn to_u128(&self) -> Option<u128> {
         ToPrimitive::to_u128(&self.0)
     }
@@ -771,11 +773,11 @@ impl<F: FastNum> Float for FastFloat<F> {
 
 use float_eq::*;
 
-impl<F: FloatEqUlpsEpsilon> FloatEqUlpsEpsilon for FastFloat<F>
+impl<F: FloatEqUlpsTol> FloatEqUlpsTol for FastFloat<F>
 where
-    UlpsEpsilon<F>: Sized,
+    UlpsTol<F>: Sized,
 {
-    type UlpsEpsilon = FastFloat<UlpsEpsilon<F>>;
+    type UlpsTol = FastFloat<UlpsTol<F>>;
 }
 
 impl<F: FloatEqDebugUlpsDiff> FloatEqDebugUlpsDiff for FastFloat<F> {
@@ -784,50 +786,50 @@ impl<F: FloatEqDebugUlpsDiff> FloatEqDebugUlpsDiff for FastFloat<F> {
 
 impl<F> FloatEq for FastFloat<F>
 where
-    F: FloatEq + FloatEqUlpsEpsilon,
-    F::Epsilon: Sized,
-    UlpsEpsilon<F>: Sized,
-    UlpsEpsilon<F::Epsilon>: Sized,
+    F: FloatEq + FloatEqUlpsTol,
+    F::Tol: Sized,
+    UlpsTol<F>: Sized,
+    UlpsTol<F::Tol>: Sized,
 {
-    type Epsilon = FastFloat<F::Epsilon>;
+    type Tol = FastFloat<F::Tol>;
 
-    fn eq_abs(&self, other: &Self, max_diff: &Self::Epsilon) -> bool {
+    fn eq_abs(&self, other: &Self, max_diff: &Self::Tol) -> bool {
         self.0.eq_abs(&other.0, &max_diff.0)
     }
 
-    fn eq_rmax(&self, other: &Self, max_diff: &Self::Epsilon) -> bool {
+    fn eq_rmax(&self, other: &Self, max_diff: &Self::Tol) -> bool {
         self.0.eq_rmax(&other.0, &max_diff.0)
     }
 
-    fn eq_rmin(&self, other: &Self, max_diff: &Self::Epsilon) -> bool {
+    fn eq_rmin(&self, other: &Self, max_diff: &Self::Tol) -> bool {
         self.0.eq_rmin(&other.0, &max_diff.0)
     }
 
-    fn eq_r1st(&self, other: &Self, max_diff: &Self::Epsilon) -> bool {
+    fn eq_r1st(&self, other: &Self, max_diff: &Self::Tol) -> bool {
         self.0.eq_r1st(&other.0, &max_diff.0)
     }
 
-    fn eq_r2nd(&self, other: &Self, max_diff: &Self::Epsilon) -> bool {
+    fn eq_r2nd(&self, other: &Self, max_diff: &Self::Tol) -> bool {
         self.0.eq_r2nd(&other.0, &max_diff.0)
     }
 
-    fn eq_ulps(&self, other: &Self, max_diff: &UlpsEpsilon<Self::Epsilon>) -> bool {
+    fn eq_ulps(&self, other: &Self, max_diff: &UlpsTol<Self::Tol>) -> bool {
         self.0.eq_ulps(&other.0, &max_diff.0)
     }
 }
 
 impl<F> AssertFloatEq for FastFloat<F>
 where
-    F: FloatEqUlpsEpsilon + AssertFloatEq + core::fmt::Debug,
-    F::Epsilon: Sized,
-    F::DebugEpsilon: Sized,
-    UlpsEpsilon<F>: Sized,
-    UlpsEpsilon<F::Epsilon>: Sized,
-    UlpsEpsilon<F::DebugEpsilon>: Sized,
+    F: FloatEqUlpsTol + AssertFloatEq + core::fmt::Debug,
+    F::Tol: Sized,
+    F::DebugTol: Sized,
+    UlpsTol<F>: Sized,
+    UlpsTol<F::Tol>: Sized,
+    UlpsTol<F::DebugTol>: Sized,
 {
     type DebugAbsDiff = FastFloat<F::DebugAbsDiff>;
 
-    type DebugEpsilon = FastFloat<F::DebugEpsilon>;
+    type DebugTol = FastFloat<F::DebugTol>;
 
     fn debug_abs_diff(&self, other: &Self) -> Self::DebugAbsDiff {
         FastFloat(self.0.debug_abs_diff(&other.0))
@@ -837,34 +839,34 @@ where
         FastFloat(self.0.debug_ulps_diff(&other.0))
     }
 
-    fn debug_abs_epsilon(&self, other: &Self, max_diff: &Self::Epsilon) -> Self::DebugEpsilon {
-        FastFloat(self.0.debug_abs_epsilon(&other.0, &max_diff.0))
+    fn debug_abs_tol(&self, other: &Self, max_diff: &Self::Tol) -> Self::DebugTol {
+        FastFloat(self.0.debug_abs_tol(&other.0, &max_diff.0))
     }
 
-    fn debug_rmax_epsilon(&self, other: &Self, max_diff: &Self::Epsilon) -> Self::DebugEpsilon {
-        FastFloat(self.0.debug_rmax_epsilon(&other.0, &max_diff.0))
+    fn debug_rmax_tol(&self, other: &Self, max_diff: &Self::Tol) -> Self::DebugTol {
+        FastFloat(self.0.debug_rmax_tol(&other.0, &max_diff.0))
     }
 
-    fn debug_rmin_epsilon(&self, other: &Self, max_diff: &Self::Epsilon) -> Self::DebugEpsilon {
-        FastFloat(self.0.debug_rmin_epsilon(&other.0, &max_diff.0))
+    fn debug_rmin_tol(&self, other: &Self, max_diff: &Self::Tol) -> Self::DebugTol {
+        FastFloat(self.0.debug_rmin_tol(&other.0, &max_diff.0))
     }
 
-    fn debug_r1st_epsilon(&self, other: &Self, max_diff: &Self::Epsilon) -> Self::DebugEpsilon {
-        FastFloat(self.0.debug_r1st_epsilon(&other.0, &max_diff.0))
+    fn debug_r1st_tol(&self, other: &Self, max_diff: &Self::Tol) -> Self::DebugTol {
+        FastFloat(self.0.debug_r1st_tol(&other.0, &max_diff.0))
     }
 
-    fn debug_r2nd_epsilon(&self, other: &Self, max_diff: &Self::Epsilon) -> Self::DebugEpsilon {
-        FastFloat(self.0.debug_r2nd_epsilon(&other.0, &max_diff.0))
+    fn debug_r2nd_tol(&self, other: &Self, max_diff: &Self::Tol) -> Self::DebugTol {
+        FastFloat(self.0.debug_r2nd_tol(&other.0, &max_diff.0))
     }
 
-    fn debug_ulps_epsilon(
+    fn debug_ulps_tol(
         &self,
         other: &Self,
-        max_diff: &UlpsEpsilon<Self::Epsilon>,
-    ) -> UlpsEpsilon<Self::DebugEpsilon>
+        max_diff: &UlpsTol<Self::Tol>,
+    ) -> UlpsTol<Self::DebugTol>
     where
-        UlpsEpsilon<Self::DebugEpsilon>: Sized,
+        UlpsTol<Self::DebugTol>: Sized,
     {
-        FastFloat(self.0.debug_ulps_epsilon(&other.0, &max_diff.0))
+        FastFloat(self.0.debug_ulps_tol(&other.0, &max_diff.0))
     }
 }
