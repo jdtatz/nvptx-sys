@@ -6,43 +6,43 @@ unsafe fn cuda_panic_handler(panic_info: &PanicInfo) -> ! {
     let (file, line) = if let Some(loc) = panic_info.location() {
         (loc.file(), loc.line())
     } else {
-        ("unknown\0", 0)
+        unsafe { core::hint::unreachable_unchecked() };
     };
 
     let message = {
         #[cfg(feature = "noisy-panics")]
         {
-            #[cfg(feature = "alloc")]
+            #[cfg(feature = "global-allocator")]
             {
                 if let Some(args) = panic_info.message() {
                     if let Some(msg) = args.as_str() {
                         alloc::borrow::Cow::Borrowed(msg)
                     } else {
                         let mut msg = alloc::string::String::new();
-                        if let Err(_e) = core::fmt::write(&mut msg, *args) {
+                        if let Err(core::fmt::Error) = core::fmt::write(&mut msg, *args) {
                             alloc::borrow::Cow::Borrowed(
-                                "Secondary error when trying to display previous",
+                                "Failed to create panic message\0",
                             )
                         } else {
                             alloc::borrow::Cow::Owned(msg)
                         }
                     }
-                } else if let Some(msg) = panic_info.payload().downcast_ref::<&'static str>() {
-                    alloc::borrow::Cow::Borrowed(*msg)
-                } else if let Some(msg) =
-                    panic_info.payload().downcast_ref::<alloc::string::String>()
-                {
-                    alloc::borrow::Cow::Borrowed(msg.as_str())
                 } else {
-                    alloc::borrow::Cow::Borrowed("unknown error")
+                    unsafe { core::hint::unreachable_unchecked() };
+                    // alloc::borrow::Cow::Borrowed("unknown error")
                 }
             }
-            #[cfg(not(feature = "alloc"))]
+            #[cfg(not(feature = "global-allocator"))]
             {
-                if let Some(msg) = panic_info.payload().downcast_ref::<&'static str>() {
-                    msg
+                if let Some(args) = panic_info.message() {
+                    if let Some(msg) = args.as_str() {
+                        alloc::borrow::Cow::Borrowed(msg)
+                    } else {
+                        "panicked!\0"
+                    }
                 } else {
-                    "unknown error"
+                    unsafe { core::hint::unreachable_unchecked() };
+                    // "unknown error"
                 }
             }
         }

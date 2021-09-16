@@ -1,9 +1,9 @@
 use crate::syscall::{free, malloc};
-use core::alloc::{GlobalAlloc, Layout};
+use core::{alloc::{GlobalAlloc, Layout}};
 
-struct CudaAllocator;
+pub struct CudaSysAllocator;
 
-unsafe impl GlobalAlloc for CudaAllocator {
+unsafe impl GlobalAlloc for CudaSysAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         malloc(layout.size())
     }
@@ -14,23 +14,19 @@ unsafe impl GlobalAlloc for CudaAllocator {
 }
 
 #[cfg(feature = "unstable-allocator-api")]
-unsafe impl core::alloc::Allocator for CudaAllocator {
+unsafe impl core::alloc::Allocator for CudaSysAllocator {
     fn allocate(
         &self,
         layout: Layout,
     ) -> Result<core::ptr::NonNull<[u8]>, core::alloc::AllocError> {
-        todo!()
+        core::ptr::NonNull::new(unsafe { core::ptr::slice_from_raw_parts_mut(malloc(layout.size()), layout.size()) }).ok_or(core::alloc::AllocError)
     }
 
-    unsafe fn deallocate(&self, ptr: core::ptr::NonNull<u8>, layout: Layout) {
-        todo!()
+    unsafe fn deallocate(&self, ptr: core::ptr::NonNull<u8>, _layout: Layout) {
+        free(ptr.as_ptr())
     }
 }
 
+#[cfg(feature="global-allocator")]
 #[global_allocator]
-static GLOBAL_ALLOCATOR: CudaAllocator = CudaAllocator;
-
-#[alloc_error_handler]
-fn handle_alloc_error(_layout: Layout) -> ! {
-    panic!("alloc error")
-}
+static GLOBAL_ALLOCATOR: CudaSysAllocator = CudaSysAllocator;

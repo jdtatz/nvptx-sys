@@ -1,13 +1,10 @@
 #![no_std]
 #![feature(core_intrinsics, asm, global_asm, link_llvm_intrinsics, ffi_const)]
-#![cfg_attr(feature = "alloc", feature(alloc_error_handler))]
-#![cfg_attr(
-    all(feature = "panic", feature = "alloc"),
-    feature(panic_info_message, fmt_as_str)
-)]
+#![cfg_attr(feature = "panic", feature(panic_info_message))]
+#![cfg_attr(feature = "unstable-allocator-api", feature(allocator_api))]
 #![allow(non_camel_case_types)]
 
-#[cfg(feature = "alloc")]
+#[cfg(feature = "global-allocator")]
 extern crate alloc;
 #[macro_use]
 extern crate derive_more;
@@ -21,7 +18,6 @@ https://docs.nvidia.com/cuda/parallel-thread-execution/index.htm
 https://docs.nvidia.com/cuda/ptx-writers-guide-to-interoperability/index.html
 */
 
-#[cfg(feature = "alloc")]
 mod allocator;
 mod barrier;
 mod float;
@@ -30,6 +26,7 @@ mod panic;
 mod shuffle;
 mod sreg;
 mod syscall;
+pub use crate::allocator::CudaSysAllocator;
 pub use crate::barrier::*;
 pub use crate::float::*;
 pub use crate::shuffle::*;
@@ -167,7 +164,7 @@ impl Match for f64 {
 
 global_asm!(".extern .shared .align 16 .b8 dynamic_shared_memory[];");
 
-pub unsafe fn dynamic_shared_memory() -> (*mut (), usize) {
+pub unsafe fn dynamic_shared_memory() -> (NonNull<()>, usize) {
     let mut shared_ptr;
     let mut dyn_mem_size: u32;
     asm!(
@@ -176,7 +173,7 @@ pub unsafe fn dynamic_shared_memory() -> (*mut (), usize) {
         sz = out(reg32) dyn_mem_size,
         options(pure, nomem, nostack, preserves_flags)
     );
-    (shared_ptr, dyn_mem_size as usize)
+    (NonNull::new_unchecked(shared_ptr), dyn_mem_size as usize)
 }
 
 pub unsafe fn dynamic_shared_array<T: 'static + Sized + Send + Sync>(

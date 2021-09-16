@@ -1,8 +1,8 @@
 [package]
 name = "nvptx-sys"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Julia Tatz <tatz.j@northeastern.edu>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 libm = "0.2"
@@ -14,8 +14,9 @@ nvptx-vprintf = { path = "nvptx-vprintf" }
 [features]
 default = []
 panic = []
-alloc = []
 noisy-panics = ["panic"]
+global-allocator = []
+unstable-allocator-api = []
 i128 = ["num-traits/i128"]
 
 [workspace]
