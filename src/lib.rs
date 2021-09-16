@@ -3,6 +3,7 @@
 #![cfg_attr(feature = "panic", feature(panic_info_message))]
 #![cfg_attr(feature = "unstable-allocator-api", feature(allocator_api))]
 #![allow(non_camel_case_types)]
+#![deny(unsafe_op_in_unsafe_fn)]
 
 #[cfg(feature = "global-allocator")]
 extern crate alloc;
@@ -167,33 +168,18 @@ global_asm!(".extern .shared .align 16 .b8 dynamic_shared_memory[];");
 pub unsafe fn dynamic_shared_memory() -> (NonNull<()>, usize) {
     let mut shared_ptr;
     let mut dyn_mem_size: u32;
-    asm!(
-        "cvta.shared.u64 {ptr}, dynamic_shared_memory; mov.u32 {sz}, %dynamic_smem_size;",
-        ptr = out(reg64) shared_ptr,
-        sz = out(reg32) dyn_mem_size,
-        options(pure, nomem, nostack, preserves_flags)
-    );
-    (NonNull::new_unchecked(shared_ptr), dyn_mem_size as usize)
-}
-
-pub unsafe fn dynamic_shared_array<T: 'static + Sized + Send + Sync>(
-    n: usize,
-) -> Option<NonNull<[T]>> {
-    let mut shared_ptr;
-    let mut dyn_mem_size: u32;
-    asm!(
-        "cvta.shared.u64 {ptr}, dynamic_shared_memory; mov.u32 {sz}, %dynamic_smem_size;",
-        ptr = out(reg64) shared_ptr,
-        sz = out(reg32) dyn_mem_size,
-        options(pure, nomem, nostack, preserves_flags)
-    );
-    if n * core::mem::size_of::<T>() <= dyn_mem_size as usize {
-        Some(NonNull::new_unchecked(core::ptr::slice_from_raw_parts_mut(
-            shared_ptr, n,
-        )))
-    } else {
-        None
+    unsafe {
+        asm!(
+            "cvta.shared.u64 {ptr}, dynamic_shared_memory; mov.u32 {sz}, %dynamic_smem_size;",
+            ptr = out(reg64) shared_ptr,
+            sz = out(reg32) dyn_mem_size,
+            options(pure, nomem, nostack, preserves_flags)
+        )
     }
+    (
+        unsafe { NonNull::new_unchecked(shared_ptr) },
+        dyn_mem_size as usize,
+    )
 }
 
 // pub unsafe fn shared<T: 'static + Sized + Send + Sync>() -> *mut T {

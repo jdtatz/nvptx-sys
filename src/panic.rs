@@ -20,9 +20,7 @@ unsafe fn cuda_panic_handler(panic_info: &PanicInfo) -> ! {
                     } else {
                         let mut msg = alloc::string::String::new();
                         if let Err(core::fmt::Error) = core::fmt::write(&mut msg, *args) {
-                            alloc::borrow::Cow::Borrowed(
-                                "Failed to create panic message\0",
-                            )
+                            alloc::borrow::Cow::Borrowed("Failed to create panic message\0")
                         } else {
                             alloc::borrow::Cow::Owned(msg)
                         }
@@ -36,7 +34,7 @@ unsafe fn cuda_panic_handler(panic_info: &PanicInfo) -> ! {
             {
                 if let Some(args) = panic_info.message() {
                     if let Some(msg) = args.as_str() {
-                        alloc::borrow::Cow::Borrowed(msg)
+                        msg
                     } else {
                         "panicked!\0"
                     }
@@ -52,11 +50,13 @@ unsafe fn cuda_panic_handler(panic_info: &PanicInfo) -> ! {
         }
     };
     // hopefully null terminators are optional
-    __assertfail(
-        message.as_ptr(),
-        file.as_ptr(),
-        line,
-        b"unknown\0".as_ptr(),
-        1,
-    );
+    unsafe {
+        __assertfail(
+            message.as_ptr(),
+            file.as_ptr(),
+            line,
+            b"unknown\0".as_ptr(),
+            1,
+        )
+    }
 }

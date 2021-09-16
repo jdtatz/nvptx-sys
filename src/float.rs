@@ -409,7 +409,7 @@ impl<F: FastNum> ToPrimitive for FastFloat<F> {
         ToPrimitive::to_i64(&self.0)
     }
 
-    #[cfg(feature="i128")]
+    #[cfg(feature = "i128")]
     fn to_i128(&self) -> Option<i128> {
         ToPrimitive::to_i128(&self.0)
     }
@@ -434,7 +434,7 @@ impl<F: FastNum> ToPrimitive for FastFloat<F> {
         ToPrimitive::to_u64(&self.0)
     }
 
-    #[cfg(feature="i128")]
+    #[cfg(feature = "i128")]
     fn to_u128(&self) -> Option<u128> {
         ToPrimitive::to_u128(&self.0)
     }
@@ -859,11 +859,7 @@ where
         FastFloat(self.0.debug_r2nd_tol(&other.0, &max_diff.0))
     }
 
-    fn debug_ulps_tol(
-        &self,
-        other: &Self,
-        max_diff: &UlpsTol<Self::Tol>,
-    ) -> UlpsTol<Self::DebugTol>
+    fn debug_ulps_tol(&self, other: &Self, max_diff: &UlpsTol<Self::Tol>) -> UlpsTol<Self::DebugTol>
     where
         UlpsTol<Self::DebugTol>: Sized,
     {
