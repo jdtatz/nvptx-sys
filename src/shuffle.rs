@@ -1,3 +1,5 @@
+use crate::FastFloat;
+
 extern "C" {
     #[ffi_const]
     #[link_name = "llvm.nvvm.shfl.sync.idx.i32"]
@@ -112,5 +114,23 @@ impl Shuffle for f32 {
 
     fn shfl_bfly(self, mask: u32, lane_mask: u32) -> Self {
         unsafe { shfl_bfly_sync_f32(mask, self, lane_mask, 0x1f) }
+    }
+}
+
+impl<F: Shuffle> Shuffle for FastFloat<F> {
+    fn shfl_idx(self, mask: u32, src_lane: u32) -> Self {
+        FastFloat(self.0.shfl_idx(mask, src_lane))
+    }
+
+    fn shfl_down(self, mask: u32, delta: u32) -> Self {
+        FastFloat(self.0.shfl_down(mask, delta))
+    }
+
+    fn shfl_up(self, mask: u32, delta: u32) -> Self {
+        FastFloat(self.0.shfl_up(mask, delta))
+    }
+
+    fn shfl_bfly(self, mask: u32, lane_mask: u32) -> Self {
+        FastFloat(self.0.shfl_bfly(mask, lane_mask))
     }
 }
