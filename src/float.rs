@@ -1,5 +1,5 @@
 use core::ops::*;
-pub use num_traits::{float::FloatCore, Float, Num, NumCast, One, ToPrimitive, Zero};
+pub use num_traits::{float::FloatCore, Float, Num, NumCast, One, AsPrimitive, ToPrimitive, Zero};
 
 extern "C" {
     // #[link_name = "llvm.nvvm.add.rn.ftz.f"]
@@ -453,6 +453,24 @@ impl<F: FastNum> NumCast for FastFloat<F> {
         NumCast::from(n).map(Self)
     }
 }
+
+impl<T: 'static + Copy, F: FastNum + AsPrimitive<T>> AsPrimitive<T> for FastFloat<F> {
+    fn as_(self) -> T {
+        self.0.as_()
+    }
+}
+
+macro_rules! impl_as_primitive {
+    ($($T: ty),+) => {
+        $(impl<F: FastNum> AsPrimitive<FastFloat<F>> for $T where $T: AsPrimitive<F> {
+            fn as_(self) -> FastFloat<F> {
+                FastFloat(self.as_())
+            }
+        })+
+    };
+}
+
+impl_as_primitive! { u8, u16, u32, u64, usize, i8, i16, i32, i64, isize, f32, f64 }
 
 impl<F: FastNum> FloatCore for FastFloat<F> {
     fn infinity() -> Self {
