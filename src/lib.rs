@@ -1,5 +1,10 @@
 #![no_std]
-#![feature(core_intrinsics, asm, global_asm, link_llvm_intrinsics, ffi_const)]
+#![feature(
+    core_intrinsics,
+    asm_experimental_arch,
+    link_llvm_intrinsics,
+    ffi_const
+)]
 #![cfg_attr(feature = "panic", feature(panic_info_message))]
 #![cfg_attr(feature = "unstable-allocator-api", feature(allocator_api))]
 #![allow(non_camel_case_types)]
@@ -33,7 +38,11 @@ pub use crate::float::*;
 pub use crate::shuffle::*;
 pub use crate::sreg::*;
 pub use crate::syscall::*;
-use core::{intrinsics::transmute, ptr::NonNull};
+use core::{
+    arch::{asm, global_asm},
+    intrinsics::transmute,
+    ptr::NonNull,
+};
 pub use nvptx_vprintf::printf;
 
 pub const ALL_MEMBER_MASK: u32 = 0xffffffff;

@@ -1,5 +1,5 @@
 use core::ops::*;
-pub use num_traits::{float::FloatCore, Float, Num, NumCast, One, AsPrimitive, ToPrimitive, Zero};
+pub use num_traits::{float::FloatCore, AsPrimitive, Float, Num, NumCast, One, ToPrimitive, Zero};
 
 extern "C" {
     // #[link_name = "llvm.nvvm.add.rn.ftz.f"]
