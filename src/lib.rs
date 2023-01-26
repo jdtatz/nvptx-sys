@@ -1,10 +1,5 @@
 #![no_std]
-#![feature(
-    core_intrinsics,
-    asm_experimental_arch,
-    link_llvm_intrinsics,
-    ffi_const
-)]
+#![feature(core_intrinsics, link_llvm_intrinsics, ffi_const)]
 #![cfg_attr(feature = "panic", feature(panic_info_message))]
 #![cfg_attr(feature = "unstable-allocator-api", feature(allocator_api))]
 #![allow(non_camel_case_types)]
@@ -38,11 +33,7 @@ pub use crate::float::*;
 pub use crate::shuffle::*;
 pub use crate::sreg::*;
 pub use crate::syscall::*;
-use core::{
-    arch::{asm, global_asm},
-    intrinsics::transmute,
-    ptr::NonNull,
-};
+use core::mem::transmute;
 pub use nvptx_vprintf::printf;
 
 pub const ALL_MEMBER_MASK: u32 = 0xffffffff;
@@ -170,35 +161,4 @@ impl Match for f64 {
 //
 // impl AtomicF32 {
 //
-// }
-
-global_asm!(".extern .shared .align 16 .b8 dynamic_shared_memory[];");
-
-pub unsafe fn dynamic_shared_memory() -> (NonNull<()>, usize) {
-    let mut shared_ptr;
-    let mut dyn_mem_size: u32;
-    unsafe {
-        asm!(
-            "cvta.shared.u64 {ptr}, dynamic_shared_memory; mov.u32 {sz}, %dynamic_smem_size;",
-            ptr = out(reg64) shared_ptr,
-            sz = out(reg32) dyn_mem_size,
-            options(pure, nomem, nostack, preserves_flags)
-        )
-    }
-    (
-        unsafe { NonNull::new_unchecked(shared_ptr) },
-        dyn_mem_size as usize,
-    )
-}
-
-// pub unsafe fn shared<T: 'static + Sized + Send + Sync>() -> *mut T {
-//     let mut shared_ptr: *mut T;
-//     asm!(
-//         "{{ .shared .align {a} .b8 shared_value[{n}]; cvta.shared.u64 {ptr}, shared_value; }}",
-//         a = const core::mem::align_of::<T>(),
-//         n = const core::mem::size_of::<T>(),
-//         ptr = out(reg64) shared_ptr,
-//         options(nostack, preserves_flags)
-//     );
-//     shared_ptr
 // }
